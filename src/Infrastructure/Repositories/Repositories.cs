@@ -35,6 +35,8 @@ public class JobRepository(DispatchDbContext db) : IJobRepository
 
 public class DriverRepository(DispatchDbContext db) : IDriverRepository
 {
+    public void Add(Driver driver) => db.Drivers.Add(driver);
+
     public Task<Driver?> GetAsync(Guid id, CancellationToken ct = default) =>
         db.Drivers.FirstOrDefaultAsync(d => d.Id == id, ct);
 
@@ -91,4 +93,7 @@ public class UserRepository(DispatchDbContext db) : IUserRepository
 
     public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default) =>
         db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
+
+    public async Task<IReadOnlyList<User>> ListByRoleAsync(UserRole role, CancellationToken ct = default) =>
+        await db.Users.Where(u => u.Role == role).OrderBy(u => u.DisplayName).ToListAsync(ct);
 }

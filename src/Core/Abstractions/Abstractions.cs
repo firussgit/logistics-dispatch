@@ -15,6 +15,7 @@ public interface IDriverRepository
 {
     Task<Driver?> GetAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<Driver>> ListAsync(CancellationToken ct = default);
+    void Add(Driver driver);
     Task<IReadOnlyList<Driver>> GetIdleAsync(CancellationToken ct = default);
 }
 
@@ -51,4 +52,5 @@ public interface IUserRepository
     void Add(User user);
     Task<User?> GetAsync(Guid id, CancellationToken ct = default);
     Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default);
+    Task<IReadOnlyList<User>> ListByRoleAsync(UserRole role, CancellationToken ct = default);
 }

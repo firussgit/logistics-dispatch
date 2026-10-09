@@ -108,6 +108,7 @@ Key decisions:
 | `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |
 | `GET /api/stats?hours=24` | Dispatcher stats: delivery times, completion rate, orders per hour, per-driver numbers (window 1–168 h) |
 | `POST /api/stats/rush?count=10` | Demo: drops a burst of random orders (max 50) to simulate rush hour |
+| `GET` · `POST /api/admin/drivers` | Dispatcher lists / creates human driver accounts (also creates the driver profile); UI at `admin.html` |
 
 Hubs: `/hubs/dispatch` (signed-in; method `SendStatusUpdate(update)`, groups assigned server-side) and `/hubs/track` (anonymous; method `Track(token)`);
 events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`, `RouteReady`. Sample requests: `src/Api/Api.http`.

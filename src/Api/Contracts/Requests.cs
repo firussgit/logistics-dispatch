@@ -41,6 +41,17 @@ public class LoginRequest
     [Required, StringLength(200)] public string Password { get; set; } = "";
 }
 
+/// <summary>Dispatcher creates an account for a human driver; the driver profile is created with it.</summary>
+public class CreateDriverAccountRequest : IValidatableObject
+{
+    [Required, EmailAddress, StringLength(254)] public string Email { get; set; } = "";
+    [Required, StringLength(60, MinimumLength = 1)] public string DisplayName { get; set; } = "";
+    [Required, StringLength(200)] public string Password { get; set; } = "";
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) =>
+        new RegisterRequest { Email = Email, DisplayName = DisplayName, Password = Password }.Validate(validationContext);
+}
+
 public class RegisterRequest : IValidatableObject
 {
     [Required, EmailAddress, StringLength(254)] public string Email { get; set; } = "";

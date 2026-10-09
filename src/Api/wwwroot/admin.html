@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Admin: driver accounts</h1>
+    <span style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <a href="/" style="color:var(--accent);text-decoration:none">&larr; Console</a>
+      <span id="userbox" class="userbox"></span>
+    </span>
+  </header>
+  <main>
+    <section class="card">
+      <h2>New driver account</h2>
+      <form id="form" autocomplete="off">
+        <input id="name" placeholder="Full name" required maxlength="60">
+        <input id="email" type="email" placeholder="Email" required maxlength="254">
+        <input id="password" type="text" placeholder="Temporary password" required minlength="8" maxlength="200" autocomplete="off">
+        <button type="submit" class="primary">Create driver</button>
+      </form>
+      <p style="color:var(--muted);margin:8px 0 0">At least 8 characters with a letter and a digit. Share it with the driver securely; they sign in at the normal login page.</p>
+    </section>
+    <section class="card">
+      <h2>Driver accounts</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Created</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="toasts"></div>
+  <script src="auth.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

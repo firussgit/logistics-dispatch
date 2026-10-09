@@ -26,6 +26,7 @@ public class DispatchServiceTests
     private sealed class FakeDrivers : IDriverRepository
     {
         public readonly List<Driver> Items = [];
+        public void Add(Driver driver) => Items.Add(driver);
         public Task<Driver?> GetAsync(Guid id, CancellationToken ct = default) => Task.FromResult(Items.FirstOrDefault(d => d.Id == id));
         public Task<IReadOnlyList<Driver>> ListAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Driver>>(Items);
         public Task<IReadOnlyList<Driver>> GetIdleAsync(CancellationToken ct = default) =>
