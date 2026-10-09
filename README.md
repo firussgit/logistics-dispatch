@@ -8,6 +8,30 @@ Pending ──assign──▶ Assigned ──accept──▶ InTransit ──arr
    └──cancel──▶ Cancelled ◀──cancel──┘
 ```
 
+## Screenshots
+
+Dark theme shown; the UI follows the system light/dark setting.
+
+**Dispatcher console** — live map with road routes: trucks (orange) driving to pickups (dotted), blue trips to dropoffs, during a simulated rush hour.
+
+![Dispatcher console](docs/screenshots/dispatcher-console.jpg)
+
+**Stats** — delivery times, orders per hour, per-driver completions, earnings and offer acceptance.
+
+![Stats](docs/screenshots/stats.jpg)
+
+**Customer** — click the map to order, then follow the delivery live (here with the road route for a new order).
+
+![Customer ordering](docs/screenshots/customer.jpg)
+
+**Driver app** — a job in transit with live progress, ETA and earnings.
+
+![Driver app](docs/screenshots/driver.jpg)
+
+**Sign in** — three roles; one-click demo accounts in development.
+
+![Sign in](docs/screenshots/login.jpg)
+
 ## Run
 
 ```bash
