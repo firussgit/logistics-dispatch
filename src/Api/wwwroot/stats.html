@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispatch Stats</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .chart { display: flex; align-items: flex-end; gap: 3px; height: 140px; padding-top: 8px; }
+    .chart .col { flex: 1; min-width: 0; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .85; position: relative; }
+    .chart .col.zero { background: var(--border); height: 2px !important; }
+    .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .muted { color: var(--muted); }
+    a.nav { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dispatch Stats</h1>
+    <span style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <a class="nav" href="/">&larr; Console</a>
+      <span id="userbox" class="userbox"></span>
+    </span>
+  </header>
+
+  <main>
+    <section class="card toolbar">
+      <label>Window
+        <select id="hours">
+          <option value="1">Last hour</option>
+          <option value="6">Last 6 hours</option>
+          <option value="24" selected>Last 24 hours</option>
+          <option value="168">Last 7 days</option>
+        </select>
+      </label>
+      <span style="flex:1"></span>
+      <label>Rush hour
+        <select id="rush-count"><option>10</option><option>20</option><option>50</option></select> orders
+      </label>
+      <button id="rush-btn" class="primary">Simulate rush hour</button>
+    </section>
+
+    <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <h2>Orders per hour</h2>
+      <div id="chart" class="chart"></div>
+      <div class="axis"><span id="axis-from"></span><span id="axis-to"></span></div>
+    </section>
+
+    <section class="card">
+      <h2>Drivers</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Driver</th><th>Completed</th><th>Avg delivery</th><th>Offers</th><th>Accepted</th><th>Acceptance</th></tr></thead>
+          <tbody id="drivers"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toasts"></div>
+  <script src="auth.js"></script>
+  <script src="stats.js"></script>
+</body>
+</html>

@@ -101,11 +101,13 @@ Key decisions:
 | `POST /api/jobs/{id}/assign` `{driverId}` | Assign a driver (409 on busy driver, wrong state, or lost race) |
 | `POST /api/jobs/{id}/accept` · `/complete` · `/cancel` | Lifecycle transitions |
 | `POST /api/jobs/{id}/offer` `{driverId}` | Dispatcher manually offers a Pending job to one driver |
-| `GET /api/offers?status=| `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |driverId=` | Open offers by default (`status=all` for history) |
+| `GET /api/offers?status=&driverId=` | Open offers by default (`status=all` for history) |
 | `POST /api/offers/{id}/accept` · `/decline` | Driver answers an offer (409 if expired/withdrawn/already answered) |
 | `GET /api/jobs/{id}/route` | Road paths `{approach, trip}` as `[lat,lng]` pairs (null until computed) |
 | `GET /api/routing` | Configured routing engine and whether it is answering |
 | `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |
+| `GET /api/stats?hours=24` | Dispatcher stats: delivery times, completion rate, orders per hour, per-driver numbers (window 1–168 h) |
+| `POST /api/stats/rush?count=10` | Demo: drops a burst of random orders (max 50) to simulate rush hour |
 
 Hubs: `/hubs/dispatch` (signed-in; method `SendStatusUpdate(update)`, groups assigned server-side) and `/hubs/track` (anonymous; method `Track(token)`);
 events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`, `RouteReady`. Sample requests: `src/Api/Api.http`.

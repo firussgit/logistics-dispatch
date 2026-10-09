@@ -44,6 +44,33 @@ public record SystemStatusDto(
     int OfflineDrivers,
     double? AverageEtaSeconds);
 
+public record HourBucket(DateTimeOffset HourStart, int Orders);
+
+public record DriverStats(
+    Guid DriverId,
+    string Name,
+    bool IsAutomated,
+    int Completed,
+    double? AvgDeliveryMinutes,
+    int OffersReceived,
+    int OffersAccepted,
+    double? AcceptanceRate);
+
+public record StatsDto(
+    int WindowHours,
+    DateTimeOffset GeneratedAt,
+    int Orders,
+    int Completed,
+    int Cancelled,
+    int Active,
+    double? CompletionRate,
+    double? AvgDeliveryMinutes,
+    double? MedianDeliveryMinutes,
+    double? AvgWaitForDriverMinutes,
+    double OrdersPerHour,
+    IReadOnlyList<HourBucket> PerHour,
+    IReadOnlyList<DriverStats> Drivers);
+
 /// <summary>An offer plus just enough job context for a driver to decide.</summary>
 public record OfferDto(
     Guid Id,

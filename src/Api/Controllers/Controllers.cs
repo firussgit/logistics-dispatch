@@ -135,6 +135,31 @@ public class StatusController(IJobRepository jobs, IDriverRepository drivers) : 
 }
 
 [ApiController]
+[Authorize(Roles = Roles.Dispatcher)]
+[Route("api/stats")]
+public class StatsController(IJobRepository jobs, IOfferRepository offers, IDriverRepository drivers, DispatchService dispatch, TimeProvider time) : ControllerBase
+{
+    /// <summary>Delivery stats for orders created in the last <c>hours</c> hours (1–168, default 24).</summary>
+    [HttpGet]
+    public async Task<StatsDto> Get([FromQuery] int hours = 24, CancellationToken ct = default)
+    {
+        hours = Math.Clamp(hours, 1, 168);
+        return StatsCalculator.Compute(
+            await jobs.ListAsync(ct: ct), await offers.ListAsync(ct: ct), await drivers.ListAsync(ct), time.GetUtcNow(), hours);
+    }
+
+    /// <summary>Demo: drops a burst of random orders into the system at once to see how the fleet copes.</summary>
+    [HttpPost("rush")]
+    public async Task<ActionResult<object>> Rush([FromQuery] int count = 10, CancellationToken ct = default)
+    {
+        count = Math.Clamp(count, 1, RushHour.MaxOrders);
+        foreach (var (pickup, dropoff) in RushHour.Generate(count, Random.Shared))
+            await dispatch.CreateJobAsync("Rush order", null, pickup, dropoff, ct: ct);
+        return new { created = count };
+    }
+}
+
+[ApiController]
 [Authorize(Roles = $"{Roles.Dispatcher},{Roles.Driver}")]
 [Route("api/offers")]
 public class OffersController(DispatchService dispatch, IOfferRepository offers) : ControllerBase

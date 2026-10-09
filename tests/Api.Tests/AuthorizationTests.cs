@@ -141,6 +141,8 @@ public class AuthorizationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Post, "/api/jobs", ApiFactory.NewJobBody()));
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Get, "/api/drivers"));
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Get, "/api/status"));
+        Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Get, "/api/stats"));
+        Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Post, "/api/stats/rush"));
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Get, "/api/routing"));
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Post, $"/api/jobs/{job.Id}/assign", new { driverId = Anything }));
         Assert.Equal(HttpStatusCode.Forbidden, await Send(driver, HttpMethod.Post, $"/api/jobs/{job.Id}/cancel"));
