@@ -9,9 +9,10 @@
 #>
 param([switch]$Rebuild)
 
-$ErrorActionPreference = 'Stop'
+# Native tools (docker) write progress to stderr; Stop would turn that into errors. We check $LASTEXITCODE instead.
+$ErrorActionPreference = 'Continue'
 Set-Location $PSScriptRoot
-$image = 'ghcr.io/project-osrm/osrm-backend:latest'
+$image = 'osrm/osrm-backend:latest'
 $data = Join-Path $PSScriptRoot 'data'
 New-Item -ItemType Directory -Force $data | Out-Null
 
@@ -20,6 +21,10 @@ function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 Step 'Checking Docker'
 docker info *> $null
 if ($LASTEXITCODE -ne 0) { throw 'Docker is not running. Start Docker Desktop, wait until it says "Engine running", then re-run this script.' }
+
+Step 'Pulling the OSRM image (first run only, ~100 MB)'
+docker pull $image
+if ($LASTEXITCODE -ne 0) { throw "Could not pull $image (check your network / Docker Hub access)" }
 
 if ($Rebuild) { Get-ChildItem $data -Filter 'area.osrm*' | Remove-Item -Force }
 

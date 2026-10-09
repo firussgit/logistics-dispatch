@@ -12,6 +12,7 @@ docker compose -f routing/docker-compose.yml down     # stop
 * **Area covered:** lat 40.68–40.80, lng −74.04…−73.93 (Battery → Harlem, plus nearby Brooklyn/Jersey City). Pickups and
   dropoffs outside it snap to the nearest covered road. To change the area, edit the bbox in `overpass-query.txt` and run
   `./routing/setup.ps1 -Rebuild`.
+* **Image:** `osrm/osrm-backend` from Docker Hub (the official `ghcr.io` mirror is blocked on some networks).
 * **Data:** © OpenStreetMap contributors (ODbL), fetched from the public Overpass API. `data/` is git-ignored.
 * **Configuration:** `Routing` section of `src/Api/appsettings.json` (`Provider`: `Osrm` | `StraightLine`, `BaseUrl`).
 * **Why not the public demo server?** `router.project-osrm.org` is rate-limited and not meant for applications; self-hosting

@@ -2,7 +2,7 @@
 # Run ./setup.ps1 once (downloads the road network and prepares it); after that `docker compose up -d` is enough.
 services:
   osrm:
-    image: ghcr.io/project-osrm/osrm-backend:latest
+    image: osrm/osrm-backend:latest
     container_name: dispatch-osrm
     command: osrm-routed --algorithm mld --max-matching-size 100 /data/area.osrm
     ports:
