@@ -1,0 +1,37 @@
+@host = http://localhost:5080
+
+### Drivers
+GET {{host}}/api/drivers
+
+### Create a job
+POST {{host}}/api/jobs
+Content-Type: application/json
+
+{
+  "customerName": "Acme Corp",
+  "notes": "Fragile",
+  "pickup":  { "lat": 40.7128, "lng": -74.0060 },
+  "dropoff": { "lat": 40.7580, "lng": -73.9855 }
+}
+
+### List jobs (optionally ?status=Pending)
+GET {{host}}/api/jobs
+
+### Job detail with history (replace id)
+GET {{host}}/api/jobs/00000000-0000-0000-0000-000000000000
+
+### Assign (replace ids)
+POST {{host}}/api/jobs/00000000-0000-0000-0000-000000000000/assign
+Content-Type: application/json
+
+{ "driverId": "00000000-0000-0000-0000-000000000000" }
+
+### Accept / complete / cancel
+POST {{host}}/api/jobs/00000000-0000-0000-0000-000000000000/accept
+###
+POST {{host}}/api/jobs/00000000-0000-0000-0000-000000000000/complete
+###
+POST {{host}}/api/jobs/00000000-0000-0000-0000-000000000000/cancel
+
+### System status
+GET {{host}}/api/status
