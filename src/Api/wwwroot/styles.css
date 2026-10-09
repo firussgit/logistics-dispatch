@@ -40,3 +40,14 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 #toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; }
 .toast { background: var(--cancelled); color: #fff; padding: 9px 14px; border-radius: 8px; max-width: 320px; }
 .toast.info { background: var(--accent); }
+
+/* ---- map ---- */
+#map { height: 460px; border-radius: 8px; z-index: 0; }
+.pin { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 13px system-ui; color: #fff; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.pin.pickup { background: var(--completed); } .pin.dropoff { background: var(--cancelled); }
+.pin.truck { width: 34px; height: 34px; font-size: 18px; background: var(--completed); }
+.pin.truck.busy { background: var(--assigned); } .pin.truck.offline { background: var(--pending); }
+.driver-icon { transition: transform 1s linear; } /* glide between GPS ticks */
+.leaflet-zoom-anim .driver-icon { transition: none; }
+tr.clickable { cursor: pointer; } tr.clickable:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+a.link { color: var(--accent); text-decoration: none; }

@@ -14,7 +14,7 @@ Pending ──assign──▶ Assigned ──accept──▶ InTransit ──arr
 dotnet run --project src/Api
 ```
 
-Open <http://localhost:5080>. Create a job (try **Random nearby**) and watch it get auto-assigned to the
+Open <http://localhost:5080> (dispatcher console with a live map). Click a job reference to open its customer tracking page (`track.html?id=…`). Create a job (try **Random nearby**) and watch it get auto-assigned to the
 nearest idle driver and drive to its destination. Open a second tab to see both update live.
 The SQLite database (`dispatch.db`) is created and seeded with 5 drivers on first start.
 

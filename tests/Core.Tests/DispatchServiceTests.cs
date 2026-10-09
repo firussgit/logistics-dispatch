@@ -137,6 +137,26 @@ public class DispatchServiceTests
     }
 
     [Fact]
+    public async Task Driver_can_approach_pickup_only_while_assigned()
+    {
+        var driver = AddDriver();
+        var job = await NewJob();
+
+        await Assert.ThrowsAsync<InvalidJobTransitionException>(() =>
+            _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20));
+
+        await _svc.AssignAsync(job.Id, driver.Id);
+        await _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20);
+        Assert.Equal(new Location(40.001, -74.001), driver.CurrentLocation);
+        Assert.Equal(20, _jobs.Items[0].EtaSeconds);
+        Assert.Equal(JobStatus.Assigned, _jobs.Items[0].Status);
+
+        await _svc.StartTransitAsync(job.Id);
+        await Assert.ThrowsAsync<InvalidJobTransitionException>(() =>
+            _svc.MoveToPickupAsync(job.Id, new Location(40.002, -74.002), 10));
+    }
+
+    [Fact]
     public async Task Progress_only_allowed_while_in_transit()
     {
         var driver = AddDriver();

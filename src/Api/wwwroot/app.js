@@ -5,6 +5,7 @@
   const STATUSES = ['Pending', 'Assigned', 'InTransit', 'Completed', 'Cancelled'];
   const GROUP = 'dispatchers';
   const CENTER = { lat: 40.7128, lng: -74.006 };
+  const map = DispatchMap('map');
 
   const el = (tag, props = {}, ...kids) => {
     const n = Object.assign(document.createElement(tag), props);
@@ -45,9 +46,10 @@
   const fmtEta = (s) => (s == null ? '—' : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`);
 
   function jobRow(j) {
-    const tr = el('tr');
+    const tr = el('tr', { className: 'clickable' });
+    tr.onclick = (ev) => { if (!ev.target.closest('select,button,a')) map.focusJob(j, j.driverId); };
     tr.dataset.id = j.id;
-    tr.append(el('td', { textContent: j.reference }), el('td', { textContent: j.customerName }));
+    tr.append(el('td', {}, el('a', { className: 'link', href: `track.html?id=${j.id}`, target: '_blank', textContent: j.reference })), el('td', { textContent: j.customerName }));
     tr.append(el('td', {}, el('span', { className: `badge status-${j.status.toLowerCase()}`, textContent: j.status })));
 
     const driverCell = el('td');
@@ -92,10 +94,15 @@
     jobs.clear(); js.forEach((j) => jobs.set(j.id, j));
     drivers.clear(); ds.forEach((d) => drivers.set(d.id, d));
     renderDrivers(); renderJobs();
+    drivers.forEach((d) => map.setDriver(d));
+    jobs.forEach((j) => map.setJob(j));
+    if (!resync.fitted) { map.fitAll(); resync.fitted = true; }
   }
 
   async function refreshJob(id) {
-    jobs.set(id, await api(`/api/jobs/${id}`));
+    const j = await api(`/api/jobs/${id}`);
+    jobs.set(id, j);
+    map.setJob(j);
     renderJobs();
   }
 
@@ -103,13 +110,14 @@
   const setConn = (cls, text) => { const c = $('conn'); c.className = `conn ${cls}`; c.textContent = text; };
   const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
 
-  conn.on('JobCreated', (j) => { jobs.set(j.id, j); renderJobs(); });
+  conn.on('JobCreated', (j) => { jobs.set(j.id, j); map.setJob(j); renderJobs(); });
   conn.on('JobStatusChanged', (e) => refreshJob(e.jobId).catch(() => {}));
-  conn.on('DriverUpdated', (d) => { drivers.set(d.id, d); renderDrivers(); renderJobs(); });
+  conn.on('DriverUpdated', (d) => { drivers.set(d.id, d); map.setDriver(d); renderDrivers(); renderJobs(); });
   conn.on('JobProgress', (e) => {
     const j = jobs.get(e.jobId);
     if (!j) return;
     Object.assign(j, { etaSeconds: e.etaSeconds, progress: e.progress, currentLocation: { lat: e.lat, lng: e.lng } });
+    if (j.driverId) map.moveDriver(j.driverId, e.lat, e.lng);
     const row = document.querySelector(`tr[data-id="${e.jobId}"]`);
     if (!row) return;
     row.querySelector('.progress i').style.width = `${Math.round(e.progress * 100)}%`;

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Track your delivery</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    main.track { max-width: 760px; }
+    .hero { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .hero .eta { font-size: 34px; font-weight: 700; }
+    .hero small { color: var(--muted); display: block; }
+    .hero .eta small { font-size: 13px; font-weight: 400; }
+    #map { height: 340px; }
+    ol.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+    ol.timeline li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; color: var(--muted); }
+    ol.timeline .dot2 { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); margin-top: 3px; background: var(--card); }
+    ol.timeline li.done { color: var(--text); } ol.timeline li.done .dot2 { background: var(--completed); border-color: var(--completed); }
+    ol.timeline li.current .dot2 { background: var(--intransit); border-color: var(--intransit); box-shadow: 0 0 0 4px color-mix(in srgb, var(--intransit) 25%, transparent); }
+    ol.timeline li.current { color: var(--text); font-weight: 600; }
+    ol.timeline small { display: block; font-weight: 400; color: var(--muted); }
+    .cancelled-banner { background: var(--cancelled); color: #fff; border-radius: 8px; padding: 10px 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Track your delivery</h1>
+    <span id="conn" class="conn offline">Connecting…</span>
+  </header>
+  <main class="track">
+    <section class="card" id="summary"><p>Loading…</p></section>
+    <section class="card"><div id="map"></div></section>
+    <section class="card">
+      <h2>Status</h2>
+      <ol class="timeline" id="timeline"></ol>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="map.js"></script>
+  <script src="track.js"></script>
+</body>
+</html>

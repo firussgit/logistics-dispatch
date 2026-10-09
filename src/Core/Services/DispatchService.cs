@@ -50,6 +50,23 @@ public class DispatchService(
         return JobDto.From(job);
     }
 
+    /// <summary>Records a GPS tick while the assigned driver is driving to the pickup point.</summary>
+    public async Task MoveToPickupAsync(Guid jobId, Location location, int etaSeconds, CancellationToken ct = default)
+    {
+        var job = await GetJobAsync(jobId, ct);
+        if (job.Status != JobStatus.Assigned)
+            throw new InvalidJobTransitionException(job.Status, "move to pickup for");
+
+        var driver = await RequireDriverAsync(job, ct);
+        driver.CurrentLocation = location;
+        job.CurrentLocation = location;
+        job.EtaSeconds = etaSeconds;
+        job.UpdatedAt = time.GetUtcNow();
+        await uow.SaveChangesAsync(ct);
+
+        await notifier.JobProgressAsync(new JobProgressEvent(job.Id, location.Lat, location.Lng, etaSeconds, 0), ct);
+    }
+
     /// <summary>Records a GPS/progress tick for an in-transit job and moves its driver.</summary>
     public async Task UpdateProgressAsync(Guid jobId, Location location, int etaSeconds, double progress, CancellationToken ct = default)
     {

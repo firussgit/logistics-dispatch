@@ -55,7 +55,7 @@ public class SimulationWorker(
     {
         var opts = options.Value;
         if (opts.AutoAssign) await AutoAssignAsync(ct);
-        await StartAssignedAsync(opts, ct);
+        await ApproachPickupAsync(opts, ct);
         await MoveInTransitAsync(opts, ct);
     }
 
@@ -78,15 +78,38 @@ public class SimulationWorker(
         }
     }
 
-    private async Task StartAssignedAsync(SimulationOptions opts, CancellationToken ct)
+    /// <summary>Assigned drivers drive to the pickup point; on arrival the job goes InTransit.</summary>
+    private async Task ApproachPickupAsync(SimulationOptions opts, CancellationToken ct)
     {
         List<Job> assigned;
+        Dictionary<Guid, Driver> driversById;
         using (var scope = scopes.CreateScope())
+        {
             assigned = (await scope.ServiceProvider.GetRequiredService<IJobRepository>().ListAsync(JobStatus.Assigned, ct)).ToList();
+            driversById = (await scope.ServiceProvider.GetRequiredService<IDriverRepository>().ListAsync(ct)).ToDictionary(d => d.Id);
+        }
 
         var now = time.GetUtcNow();
-        foreach (var job in assigned.Where(j => now - (j.AssignedAt ?? j.UpdatedAt) >= opts.PickupDwell))
-            await RunAsync(job.Id, s => s.StartTransitAsync(job.Id, ct));
+        var speed = opts.DriverSpeedMps * opts.TimeScale;
+        var stepMeters = speed * opts.TickInterval.TotalSeconds;
+        foreach (var job in assigned)
+        {
+            if (job.DriverId is not { } driverId || !driversById.TryGetValue(driverId, out var driver)) continue;
+
+            var next = GeoMath.MoveToward(driver.CurrentLocation, job.Pickup, stepMeters);
+            if (next == job.Pickup)
+            {
+                // Arrived; leave once at least PickupDwell has passed since assignment.
+                if (now - (job.AssignedAt ?? job.UpdatedAt) >= opts.PickupDwell)
+                    await RunAsync(job.Id, s => s.StartTransitAsync(job.Id, ct));
+                else
+                    await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, next, 0, ct));
+                continue;
+            }
+
+            var eta = GeoMath.EtaSeconds(GeoMath.DistanceMeters(next, job.Pickup), speed);
+            await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, next, eta, ct));
+        }
     }
 
     private async Task MoveInTransitAsync(SimulationOptions opts, CancellationToken ct)
