@@ -7,6 +7,7 @@
     return n;
   };
   const mins = (v) => (v == null ? '—' : v < 1 ? `${Math.round(v * 60)}s` : `${v.toFixed(1)} min`);
+  const money = (v) => `$${Number(v).toFixed(2)}`;
   const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
   function toast(message, kind = 'error') {
@@ -27,7 +28,7 @@
       ['Orders', s.orders], ['Delivered', s.completed], ['Cancelled', s.cancelled], ['In progress', s.active],
       ['Completion rate', pct(s.completionRate)], ['Avg delivery', mins(s.avgDeliveryMinutes)],
       ['Median delivery', mins(s.medianDeliveryMinutes)], ['Avg wait for driver', mins(s.avgWaitForDriverMinutes)],
-      ['Orders / hour', s.ordersPerHour.toFixed(1)],
+      ['Orders / hour', s.ordersPerHour.toFixed(1)], ['Driver earnings', money(s.totalEarnings)],
     ];
     $('tiles').replaceChildren(...tiles.map(([label, v]) => el('div', { className: 'tile' }, el('b', { textContent: v }), el('span', { textContent: label }))));
 
@@ -43,6 +44,7 @@
     $('drivers').replaceChildren(...s.drivers.map((d) => el('tr', {},
       el('td', { textContent: d.isAutomated ? d.name : `${d.name} (human)` }),
       el('td', { textContent: d.completed }),
+      el('td', { textContent: money(d.earnings) }),
       el('td', { textContent: mins(d.avgDeliveryMinutes) }),
       el('td', { textContent: d.offersReceived }),
       el('td', { textContent: d.offersAccepted }),

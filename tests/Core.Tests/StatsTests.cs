@@ -1,5 +1,6 @@
 using LogisticsDispatch.Core.Entities;
 using LogisticsDispatch.Core.Enums;
+using LogisticsDispatch.Core.Models;
 using LogisticsDispatch.Core.Services;
 
 namespace LogisticsDispatch.Core.Tests;
@@ -96,5 +97,29 @@ public class StatsTests
             Assert.InRange(d.Lng, -74.04, -73.93);
             Assert.True(GeoMath.DistanceMeters(p, d) >= 600);
         }
+    }
+}
+
+public class StatsEarningsTests
+{
+    [Fact]
+    public void Earnings_follow_the_pay_model_per_driver_and_ignore_unfinished_jobs()
+    {
+        var now = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var a = new Location(40.70, -74.00);
+        var b = new Location(40.71, -74.00); // ~1.11 km
+        var ana = new Driver { Name = "Ana" };
+
+        var done = Job.Create("c", null, a, b, now.AddMinutes(-30));
+        done.Assign(ana.Id, now.AddMinutes(-29)); done.StartTransit(now.AddMinutes(-28)); done.Complete(now.AddMinutes(-20));
+        done.ApproachMeters = 2000;
+        var open = Job.Create("c", null, a, b, now.AddMinutes(-5));
+
+        var s = StatsCalculator.Compute([done, open], [], [ana], now, 1);
+
+        var expected = OfferDto.CalculatePayout(2000, GeoMath.DistanceMeters(a, b));
+        Assert.Equal(expected, s.Drivers[0].Earnings);
+        Assert.Equal(expected, s.TotalEarnings);
+        Assert.True(expected > 3m);
     }
 }

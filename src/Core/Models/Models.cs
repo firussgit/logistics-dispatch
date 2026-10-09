@@ -51,6 +51,7 @@ public record DriverStats(
     string Name,
     bool IsAutomated,
     int Completed,
+    decimal Earnings,
     double? AvgDeliveryMinutes,
     int OffersReceived,
     int OffersAccepted,
@@ -59,6 +60,7 @@ public record DriverStats(
 public record StatsDto(
     int WindowHours,
     DateTimeOffset GeneratedAt,
+    decimal TotalEarnings,
     int Orders,
     int Completed,
     int Cancelled,

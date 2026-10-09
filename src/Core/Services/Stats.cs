@@ -35,14 +35,14 @@ public static class StatsCalculator
             var accepted = theirOffers.Count(o => o.Status == OfferStatus.Accepted);
             var answered = theirOffers.Count(o => o.Status is OfferStatus.Accepted or OfferStatus.Declined or OfferStatus.Expired);
             return new DriverStats(
-                d.Id, d.Name, d.IsAutomated, mine.Count,
+                d.Id, d.Name, d.IsAutomated, mine.Count, mine.Sum(Earning),
                 mine.Count > 0 ? Round(mine.Average(j => (j.UpdatedAt - j.CreatedAt).TotalMinutes)) : null,
                 theirOffers.Count, accepted,
                 answered > 0 ? Round((double)accepted / answered) : null);
         }).OrderByDescending(d => d.Completed).ThenBy(d => d.Name).ToList();
 
         return new StatsDto(
-            hours, now,
+            hours, now, completed.Sum(Earning),
             inWindow.Count, completed.Count, cancelled, active,
             finished > 0 ? Round((double)completed.Count / finished) : null,
             deliveryMinutes.Count > 0 ? Round(deliveryMinutes.Average()) : null,
@@ -51,6 +51,10 @@ public static class StatsCalculator
             hours > 0 ? Round((double)inWindow.Count / hours) : 0,
             perHour, perDriver);
     }
+
+    /// <summary>Pay for a delivered job: the demo pay model applied to the drive to pickup and the trip actually made.</summary>
+    private static decimal Earning(Job j) =>
+        OfferDto.CalculatePayout(j.ApproachMeters, RoutePath.Length(j.TripRouteJson) ?? GeoMath.DistanceMeters(j.Pickup, j.Dropoff));
 
     private static double Round(double v) => Math.Round(v, 2);
 
