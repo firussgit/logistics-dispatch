@@ -54,6 +54,7 @@ public class SimulationWorker(
     public async Task TickAsync(CancellationToken ct)
     {
         var opts = options.Value;
+        await EnsureRoutesAsync(ct);
         if (opts.UseOffers) await DispatchOffersAsync(opts, ct);
         else if (opts.AutoAssign) await AutoAssignAsync(ct);
         await ApproachPickupAsync(opts, ct);
@@ -151,61 +152,98 @@ public class SimulationWorker(
         }
     }
 
-    /// <summary>Assigned drivers drive to the pickup point; on arrival the job goes InTransit.</summary>
-    private async Task ApproachPickupAsync(SimulationOptions opts, CancellationToken ct)
+    /// <summary>
+    /// Fetches missing road paths: pickup→dropoff for every active job, and driver→pickup for assigned jobs.
+    /// The provider never throws for "no routing engine" (it returns a straight line), so a path always ends up stored.
+    /// </summary>
+    private async Task EnsureRoutesAsync(CancellationToken ct)
     {
-        List<Job> assigned;
+        List<Job> active;
         Dictionary<Guid, Driver> driversById;
         using (var scope = scopes.CreateScope())
         {
-            assigned = (await scope.ServiceProvider.GetRequiredService<IJobRepository>().ListAsync(JobStatus.Assigned, ct)).ToList();
+            var jobs = scope.ServiceProvider.GetRequiredService<IJobRepository>();
+            active = [.. await jobs.ListAsync(JobStatus.Pending, ct), .. await jobs.ListAsync(JobStatus.Assigned, ct), .. await jobs.ListAsync(JobStatus.InTransit, ct)];
             driversById = (await scope.ServiceProvider.GetRequiredService<IDriverRepository>().ListAsync(ct)).ToDictionary(d => d.Id);
         }
+
+        foreach (var job in active)
+        {
+            if (job.TripRouteJson is null)
+                await FetchRouteAsync(job.Id, RouteKind.Trip, job.Pickup, job.Dropoff, ct);
+
+            if (job.Status == JobStatus.Assigned && job.ApproachRouteJson is null &&
+                job.DriverId is { } driverId && driversById.TryGetValue(driverId, out var driver))
+                await FetchRouteAsync(job.Id, RouteKind.Approach, driver.CurrentLocation, job.Pickup, ct);
+        }
+    }
+
+    private async Task FetchRouteAsync(Guid jobId, RouteKind kind, Location from, Location to, CancellationToken ct)
+    {
+        Route route;
+        using (var scope = scopes.CreateScope())
+            route = await scope.ServiceProvider.GetRequiredService<IRouteProvider>().GetRouteAsync(from, to, ct);
+        await RunAsync(jobId, s => s.SetRouteAsync(jobId, kind, route, ct));
+    }
+
+    /// <summary>Assigned drivers follow their approach route to the pickup; on arrival the job goes InTransit.</summary>
+    private async Task ApproachPickupAsync(SimulationOptions opts, CancellationToken ct)
+    {
+        List<Job> assigned;
+        using (var scope = scopes.CreateScope())
+            assigned = (await scope.ServiceProvider.GetRequiredService<IJobRepository>().ListAsync(JobStatus.Assigned, ct)).ToList();
 
         var now = time.GetUtcNow();
         var speed = opts.DriverSpeedMps * opts.TimeScale;
         var stepMeters = speed * opts.TickInterval.TotalSeconds;
         foreach (var job in assigned)
         {
-            if (job.DriverId is not { } driverId || !driversById.TryGetValue(driverId, out var driver)) continue;
+            if (RoutePath.Parse(job.ApproachRouteJson) is not { } path) continue; // route not fetched yet
 
-            var next = GeoMath.MoveToward(driver.CurrentLocation, job.Pickup, stepMeters);
-            if (next == job.Pickup)
+            var total = RoutePath.Length(path);
+            var traveled = Math.Min(total, job.ApproachMeters + stepMeters);
+            var position = RoutePath.PointAt(path, traveled);
+
+            if (traveled >= total)
             {
                 // Arrived; leave once at least PickupDwell has passed since assignment.
                 if (now - (job.AssignedAt ?? job.UpdatedAt) >= opts.PickupDwell)
                     await RunAsync(job.Id, s => s.StartTransitAsync(job.Id, ct));
                 else
-                    await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, next, 0, ct));
+                    await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, position, 0, total, ct));
                 continue;
             }
 
-            var eta = GeoMath.EtaSeconds(GeoMath.DistanceMeters(next, job.Pickup), speed);
-            await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, next, eta, ct));
+            var eta = GeoMath.EtaSeconds(total - traveled, speed);
+            await RunAsync(job.Id, s => s.MoveToPickupAsync(job.Id, position, eta, traveled, ct));
         }
     }
 
+    /// <summary>In-transit drivers follow the trip route to the dropoff; <c>Progress</c> is the fraction of the route covered.</summary>
     private async Task MoveInTransitAsync(SimulationOptions opts, CancellationToken ct)
     {
         List<Job> moving;
         using (var scope = scopes.CreateScope())
             moving = (await scope.ServiceProvider.GetRequiredService<IJobRepository>().ListAsync(JobStatus.InTransit, ct)).ToList();
 
-        var stepMeters = opts.DriverSpeedMps * opts.TickInterval.TotalSeconds * opts.TimeScale;
+        var speed = opts.DriverSpeedMps * opts.TimeScale;
+        var stepMeters = speed * opts.TickInterval.TotalSeconds;
         foreach (var job in moving)
         {
-            var next = GeoMath.MoveToward(job.CurrentLocation, job.Dropoff, stepMeters);
-            if (next == job.Dropoff)
+            if (RoutePath.Parse(job.TripRouteJson) is not { } path) continue; // route not fetched yet
+
+            var total = RoutePath.Length(path);
+            var traveled = Math.Min(total, job.Progress * total + stepMeters);
+            if (traveled >= total)
             {
                 await RunAsync(job.Id, s => s.CompleteAsync(job.Id, ct));
                 continue;
             }
 
-            var remaining = GeoMath.DistanceMeters(next, job.Dropoff);
-            var total = GeoMath.DistanceMeters(job.Pickup, job.Dropoff);
-            var progress = total > 0 ? 1 - remaining / total : 1;
-            var eta = GeoMath.EtaSeconds(remaining, opts.DriverSpeedMps * opts.TimeScale);
-            await RunAsync(job.Id, s => s.UpdateProgressAsync(job.Id, next, eta, progress, ct));
+            var position = RoutePath.PointAt(path, traveled);
+            var progress = total > 0 ? traveled / total : 1;
+            var eta = GeoMath.EtaSeconds(total - traveled, speed);
+            await RunAsync(job.Id, s => s.UpdateProgressAsync(job.Id, position, eta, progress, ct));
         }
     }
 

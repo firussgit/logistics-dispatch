@@ -71,6 +71,7 @@
   const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
 
   conn.on('JobStatusChanged', (e) => { if (e.jobId === id) load().catch(() => {}); });
+  conn.on('RouteReady', (e) => { if (e.jobId === id) map.loadRoute(id, true); });
   conn.on('JobProgress', (e) => {
     if (e.jobId !== id || !job) return;
     Object.assign(job, { etaSeconds: e.etaSeconds, progress: e.progress, currentLocation: { lat: e.lat, lng: e.lng } });

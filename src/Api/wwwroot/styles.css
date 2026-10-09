@@ -59,3 +59,8 @@ a.link { color: var(--accent); text-decoration: none; }
 .activity time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .activity li.accepted { color: var(--completed); } .activity li.declined, .activity li.expired { color: var(--cancelled); }
 .activity li.offer { color: var(--intransit); } .activity li.cancelled { color: var(--muted); }
+
+/* ---- routing badge ---- */
+.conn.routing { background: var(--pending); }
+.conn.routing.streets { background: var(--completed); }
+.conn.routing.straight { background: var(--assigned); }

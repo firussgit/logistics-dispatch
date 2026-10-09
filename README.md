@@ -18,6 +18,13 @@ Open <http://localhost:5080> (dispatcher console with a live map). Click a job r
 nearest idle driver and drive to its destination. Open a second tab to see both update live.
 The SQLite database (`dispatch.db`) is created and seeded with 5 drivers on first start.
 
+## Street routes
+
+Drivers follow real roads: each job gets a pickup→dropoff path (and an approach path from the driver's position at assignment) from a
+self-hosted [OSRM](https://project-osrm.org/) server, stored on the job and drawn on every map. The dispatcher header badge shows
+**Street routes** or **Straight-line routes**. If OSRM isn't running the app falls back to straight lines automatically.
+Setup (needs Docker Desktop): `./routing/setup.ps1` - see [routing/README.md](routing/README.md).
+
 ## Driver offers
 
 With `Simulation:UseOffers` on (the default in `appsettings.json`) jobs are no longer assigned instantly. Each Pending job is
@@ -68,10 +75,12 @@ Key decisions:
 | `POST /api/jobs/{id}/offer` `{driverId}` | Dispatcher manually offers a Pending job to one driver |
 | `GET /api/offers?status=| `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |driverId=` | Open offers by default (`status=all` for history) |
 | `POST /api/offers/{id}/accept` · `/decline` | Driver answers an offer (409 if expired/withdrawn/already answered) |
+| `GET /api/jobs/{id}/route` | Road paths `{approach, trip}` as `[lat,lng]` pairs (null until computed) |
+| `GET /api/routing` | Configured routing engine and whether it is answering |
 | `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |
 
 Hub: `/hubs/dispatch` — methods `JoinDispatchGroup(group)`, `LeaveDispatchGroup(group)`, `SendStatusUpdate(update)`;
-events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`. Sample requests: `src/Api/Api.http`.
+events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`, `RouteReady`. Sample requests: `src/Api/Api.http`.
 
 ## Switching to SQL Server
 

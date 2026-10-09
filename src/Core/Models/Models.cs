@@ -61,7 +61,7 @@ public record OfferDto(
     public static OfferDto From(JobOffer o, Job job, Driver driver)
     {
         var toPickup = GeoMath.DistanceMeters(driver.CurrentLocation, job.Pickup);
-        var trip = GeoMath.DistanceMeters(job.Pickup, job.Dropoff);
+        var trip = RoutePath.Length(job.TripRouteJson) ?? GeoMath.DistanceMeters(job.Pickup, job.Dropoff);
         return new OfferDto(o.Id, o.JobId, job.Reference, job.CustomerName, o.DriverId, o.Status, o.CreatedAt, o.ExpiresAt,
             job.Pickup, job.Dropoff, toPickup, trip, CalculatePayout(toPickup, trip));
     }
@@ -70,3 +70,8 @@ public record OfferDto(
     public static decimal CalculatePayout(double toPickupMeters, double tripMeters) =>
         Math.Round(3m + 1.2m * (decimal)(tripMeters / 1000) + 0.4m * (decimal)(toPickupMeters / 1000), 2);
 }
+
+/// <summary>Road paths for a job as <c>[lat,lng]</c> pairs; a leg is null until the router has produced it.</summary>
+public record RouteDto(Guid JobId, IReadOnlyList<double[]>? Approach, IReadOnlyList<double[]>? Trip, bool IsStraightLine);
+
+public record RouteReadyEvent(Guid JobId, RouteKind Kind);

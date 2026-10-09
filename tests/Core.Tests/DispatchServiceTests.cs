@@ -3,6 +3,7 @@ using LogisticsDispatch.Core.Entities;
 using LogisticsDispatch.Core.Enums;
 using LogisticsDispatch.Core.Exceptions;
 using LogisticsDispatch.Core.Models;
+using LogisticsDispatch.Core.Routing;
 using LogisticsDispatch.Core.Services;
 
 namespace LogisticsDispatch.Core.Tests;
@@ -62,6 +63,7 @@ public class DispatchServiceTests
         public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) { Events.Add($"driver:{driver.Status}"); return Task.CompletedTask; }
         public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Add("offer:created"); return Task.CompletedTask; }
         public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Add($"offer:{offer.Status}"); return Task.CompletedTask; }
+        public Task RouteReadyAsync(RouteReadyEvent e, CancellationToken ct = default) { Events.Add($"route:{e.Kind}"); return Task.CompletedTask; }
     }
 
     private readonly FakeJobs _jobs = new();
@@ -298,6 +300,74 @@ public class DispatchServiceTests
         Assert.Equal(OfferStatus.Cancelled, _offers.Items[1].Status);
     }
 
+    // ------------------------------------------------------------ routes
+
+    private static Route Path(params (double lat, double lng)[] pts) =>
+        new(pts.Select(p => new Location(p.lat, p.lng)).ToList(), 0);
+
+    [Fact]
+    public async Task SetRoute_stores_the_trip_and_notifies_and_GetRoute_returns_it()
+    {
+        var job = await NewJob();
+
+        await _svc.SetRouteAsync(job.Id, RouteKind.Trip, Path((40, -74), (40.02, -74), (40.05, -74.05)));
+
+        Assert.Contains("route:Trip", _notifier.Events);
+        var dto = await _svc.GetRouteAsync(job.Id);
+        Assert.Null(dto.Approach);
+        Assert.Equal(3, dto.Trip!.Count);
+        Assert.Equal([40.02, -74], dto.Trip[1]);
+        Assert.False(dto.IsStraightLine);
+    }
+
+    [Fact]
+    public async Task Two_point_trip_route_is_reported_as_straight_line()
+    {
+        var job = await NewJob();
+        await _svc.SetRouteAsync(job.Id, RouteKind.Trip, Route.StraightLine(new Location(40, -74), new Location(40.05, -74.05)));
+        Assert.True((await _svc.GetRouteAsync(job.Id)).IsStraightLine);
+    }
+
+    [Fact]
+    public async Task Approach_route_resets_travelled_distance_and_needs_an_assigned_job()
+    {
+        var driver = AddDriver();
+        var job = await NewJob();
+        var approach = Path((40.01, -74.01), (40.005, -74.005), (40, -74));
+
+        await Assert.ThrowsAsync<InvalidJobTransitionException>(() => _svc.SetRouteAsync(job.Id, RouteKind.Approach, approach));
+
+        await _svc.AssignAsync(job.Id, driver.Id);
+        _jobs.Items[0].ApproachMeters = 999;
+        await _svc.SetRouteAsync(job.Id, RouteKind.Approach, approach);
+
+        Assert.Equal(0, _jobs.Items[0].ApproachMeters);
+        Assert.Equal(3, (await _svc.GetRouteAsync(job.Id)).Approach!.Count);
+    }
+
+    [Fact]
+    public async Task Routes_cannot_be_set_on_finished_jobs()
+    {
+        var job = await NewJob();
+        await _svc.CancelAsync(job.Id);
+        await Assert.ThrowsAsync<InvalidJobTransitionException>(() => _svc.SetRouteAsync(job.Id, RouteKind.Trip, Path((40, -74), (40.1, -74.1))));
+    }
+
+    [Fact]
+    public async Task Offer_trip_distance_uses_the_road_route_once_known()
+    {
+        var driver = AddDriver();
+        var job = await NewJob();
+        var straight = (await _svc.OfferJobAsync(job.Id, driver.Id, Ttl)).TripMeters;
+        await _svc.DeclineOfferAsync(_offers.Items[0].Id);
+
+        // a long detour (via lat 40.2) makes the road trip far longer than the crow-flies distance
+        await _svc.SetRouteAsync(job.Id, RouteKind.Trip, Path((40, -74), (40.2, -74), (40.05, -74.05)));
+        var viaRoad = (await _svc.OfferJobAsync(job.Id, driver.Id, Ttl)).TripMeters;
+
+        Assert.True(viaRoad > straight * 3, $"expected road trip ({viaRoad:0} m) to dwarf straight line ({straight:0} m)");
+    }
+
     [Fact]
     public async Task Driver_can_approach_pickup_only_while_assigned()
     {
@@ -305,17 +375,17 @@ public class DispatchServiceTests
         var job = await NewJob();
 
         await Assert.ThrowsAsync<InvalidJobTransitionException>(() =>
-            _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20));
+            _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20, 150));
 
         await _svc.AssignAsync(job.Id, driver.Id);
-        await _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20);
+        await _svc.MoveToPickupAsync(job.Id, new Location(40.001, -74.001), 20, 150);
         Assert.Equal(new Location(40.001, -74.001), driver.CurrentLocation);
         Assert.Equal(20, _jobs.Items[0].EtaSeconds);
         Assert.Equal(JobStatus.Assigned, _jobs.Items[0].Status);
 
         await _svc.StartTransitAsync(job.Id);
         await Assert.ThrowsAsync<InvalidJobTransitionException>(() =>
-            _svc.MoveToPickupAsync(job.Id, new Location(40.002, -74.002), 10));
+            _svc.MoveToPickupAsync(job.Id, new Location(40.002, -74.002), 10, 300));
     }
 
     [Fact]

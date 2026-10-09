@@ -11,6 +11,7 @@ public static class HubEvents
     public const string DriverUpdated = "DriverUpdated";
     public const string OfferCreated = "OfferCreated";
     public const string OfferUpdated = "OfferUpdated";
+    public const string RouteReady = "RouteReady";
     public const string DispatchGroup = "dispatchers";
 }
 
@@ -60,6 +61,7 @@ public class SignalRDispatchNotifier(IHubContext<DispatchHub> hub, ILogger<Signa
     public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) => SendAsync(HubEvents.DriverUpdated, driver, ct);
     public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) => SendAsync(HubEvents.OfferCreated, offer, ct);
     public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) => SendAsync(HubEvents.OfferUpdated, offer, ct);
+    public Task RouteReadyAsync(RouteReadyEvent e, CancellationToken ct = default) => SendAsync(HubEvents.RouteReady, e, ct);
 
     private async Task SendAsync(string method, object payload, CancellationToken ct)
     {

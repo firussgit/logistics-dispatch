@@ -155,6 +155,8 @@
   const setConn = (cls, text) => { const c = $('conn'); c.className = `conn ${cls}`; c.textContent = text; };
   const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
 
+  conn.on('RouteReady', (e) => map.loadRoute(e.jobId, true));
+
   conn.on('OfferCreated', (o) => {
     if (!me || o.driverId !== me.id) return;
     offer = o;

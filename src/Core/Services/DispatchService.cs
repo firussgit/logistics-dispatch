@@ -131,7 +131,7 @@ public class DispatchService(
     }
 
     /// <summary>Records a GPS tick while the assigned driver is driving to the pickup point.</summary>
-    public async Task MoveToPickupAsync(Guid jobId, Location location, int etaSeconds, CancellationToken ct = default)
+    public async Task MoveToPickupAsync(Guid jobId, Location location, int etaSeconds, double approachMeters, CancellationToken ct = default)
     {
         var job = await GetJobAsync(jobId, ct);
         if (job.Status != JobStatus.Assigned)
@@ -141,6 +141,7 @@ public class DispatchService(
         driver.CurrentLocation = location;
         job.CurrentLocation = location;
         job.EtaSeconds = etaSeconds;
+        job.ApproachMeters = approachMeters;
         job.UpdatedAt = time.GetUtcNow();
         await uow.SaveChangesAsync(ct);
 
@@ -200,6 +201,42 @@ public class DispatchService(
         await PublishStatusAsync(job, ct);
         if (driver is not null) await notifier.DriverUpdatedAsync(DriverDto.From(driver), ct);
         return JobDto.From(job);
+    }
+
+    // --------------------------------------------------------------- routes
+
+    /// <summary>Stores a road path for one leg of the job and tells clients to (re)load it.</summary>
+    public async Task SetRouteAsync(Guid jobId, RouteKind kind, Route route, CancellationToken ct = default)
+    {
+        var job = await GetJobAsync(jobId, ct);
+        if (job.Status is JobStatus.Completed or JobStatus.Cancelled)
+            throw new InvalidJobTransitionException(job.Status, "set a route for");
+        if (kind == RouteKind.Approach && job.Status != JobStatus.Assigned)
+            throw new InvalidJobTransitionException(job.Status, "set an approach route for");
+
+        var json = RoutePath.Serialize(route.Points);
+        if (kind == RouteKind.Approach)
+        {
+            job.ApproachRouteJson = json;
+            job.ApproachMeters = 0;
+        }
+        else
+        {
+            job.TripRouteJson = json;
+        }
+        await uow.SaveChangesAsync(ct);
+        await notifier.RouteReadyAsync(new RouteReadyEvent(job.Id, kind), ct);
+    }
+
+    public async Task<RouteDto> GetRouteAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var job = await GetJobAsync(jobId, ct);
+        static IReadOnlyList<double[]>? Pairs(string? json) =>
+            RoutePath.Parse(json)?.Select(p => new[] { p.Lat, p.Lng }).ToList();
+
+        var trip = RoutePath.Parse(job.TripRouteJson);
+        // A two-point trip route means routing was unavailable and we fell back to a straight line.
+        return new RouteDto(job.Id, Pairs(job.ApproachRouteJson), Pairs(job.TripRouteJson), trip is { Count: 2 });
     }
 
     public async Task<JobDto> GetJobDetailAsync(Guid jobId, CancellationToken ct = default)

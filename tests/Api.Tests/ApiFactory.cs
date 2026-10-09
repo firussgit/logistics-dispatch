@@ -28,6 +28,7 @@ public sealed class RecordingNotifier(IHubContext<DispatchHub> hub) : IDispatchN
     public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) { Events.Enqueue($"driver:{driver.Status}"); return _inner.DriverUpdatedAsync(driver, ct); }
     public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Enqueue("offer:created"); return _inner.OfferCreatedAsync(offer, ct); }
     public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Enqueue($"offer:{offer.Status}"); return _inner.OfferUpdatedAsync(offer, ct); }
+    public Task RouteReadyAsync(RouteReadyEvent e, CancellationToken ct = default) { Events.Enqueue($"route:{e.Kind}"); return _inner.RouteReadyAsync(e, ct); }
 }
 
 /// <summary>Boots the real app against a throwaway SQLite file. Simulation is off unless requested.</summary>
@@ -52,6 +53,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Dispatch", $"Data Source={_dbPath}");
         builder.UseSetting("Simulation:Enabled", _simulation.ToString());
         builder.UseSetting("Simulation:AutoAssign", _simulation.ToString());
+        builder.UseSetting("Routing:Provider", "StraightLine"); // tests never touch the network
         builder.UseSetting("Simulation:UseOffers", "false"); // appsettings.json enables offers; most tests want instant assignment
         builder.UseSetting("Simulation:TickInterval", "00:00:00.050");
         builder.UseSetting("Simulation:TimeScale", "1000");

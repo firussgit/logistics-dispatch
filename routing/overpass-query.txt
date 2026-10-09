@@ -1,0 +1,6 @@
+[out:xml][timeout:240][bbox:40.68,-74.04,40.80,-73.93];
+(
+  way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"];
+);
+(._;>;);
+out;

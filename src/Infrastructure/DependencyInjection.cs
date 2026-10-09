@@ -1,10 +1,12 @@
 using LogisticsDispatch.Infrastructure.Data;
 using LogisticsDispatch.Infrastructure.Realtime;
 using LogisticsDispatch.Infrastructure.Repositories;
+using LogisticsDispatch.Infrastructure.Routing;
 using LogisticsDispatch.Infrastructure.Simulation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace LogisticsDispatch.Infrastructure;
 
@@ -25,6 +27,23 @@ public static class DependencyInjection
             o.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
         services.AddSingleton<IDispatchNotifier, SignalRDispatchNotifier>();
         services.AddSingleton(TimeProvider.System);
+
+        services.Configure<RoutingOptions>(config.GetSection(RoutingOptions.Section));
+        services.AddSingleton<RoutingHealth>();
+        if (string.Equals(config["Routing:Provider"], "StraightLine", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IRouteProvider, StraightLineRouteProvider>();
+        }
+        else
+        {
+            services.AddHttpClient<OsrmRouteProvider>((sp, client) =>
+            {
+                var o = sp.GetRequiredService<IOptions<RoutingOptions>>().Value;
+                client.BaseAddress = new Uri(o.BaseUrl.TrimEnd('/') + "/");
+                client.Timeout = TimeSpan.FromSeconds(o.TimeoutSeconds);
+            });
+            services.AddTransient<IRouteProvider>(sp => sp.GetRequiredService<OsrmRouteProvider>());
+        }
 
         services.Configure<SimulationOptions>(config.GetSection(SimulationOptions.Section));
         services.AddHostedService<SimulationWorker>();

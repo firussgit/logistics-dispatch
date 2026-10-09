@@ -1,5 +1,6 @@
 using LogisticsDispatch.Api.Contracts;
 using LogisticsDispatch.Core.Abstractions;
+using LogisticsDispatch.Core.Entities;
 using LogisticsDispatch.Core.Enums;
 using LogisticsDispatch.Core.Models;
 using LogisticsDispatch.Core.Services;
@@ -24,6 +25,10 @@ public class JobsController(DispatchService dispatch, IJobRepository jobs) : Con
 
     [HttpGet("{id:guid}")]
     public Task<JobDto> Get(Guid id, CancellationToken ct) => dispatch.GetJobDetailAsync(id, ct);
+
+    /// <summary>Road paths for the job (driver→pickup and pickup→dropoff). A leg is null until the router has produced it.</summary>
+    [HttpGet("{id:guid}/route")]
+    public Task<RouteDto> GetRoute(Guid id, CancellationToken ct) => dispatch.GetRouteAsync(id, ct);
 
     [HttpPost("{id:guid}/assign")]
     public Task<JobDto> Assign(Guid id, AssignJobRequest req, CancellationToken ct) => dispatch.AssignAsync(id, req.DriverId!.Value, ct);
@@ -93,4 +98,32 @@ public class OffersController(DispatchService dispatch) : ControllerBase
 
     [HttpPost("{id:guid}/decline")]
     public Task<OfferDto> Decline(Guid id, CancellationToken ct) => dispatch.DeclineOfferAsync(id, ct);
+}
+
+[ApiController]
+[Route("api/routing")]
+public class RoutingController(
+    Microsoft.Extensions.Options.IOptions<LogisticsDispatch.Infrastructure.Routing.RoutingOptions> options,
+    LogisticsDispatch.Core.Routing.IRouteProvider router) : ControllerBase
+{
+    // A short hop inside the covered area; if the engine is healthy this comes back as a real road path.
+    private static readonly Location ProbeFrom = new(40.7128, -74.0060);
+    private static readonly Location ProbeTo = new(40.7138, -74.0045);
+
+    /// <summary>Which routing engine is configured and whether it is actually answering (probed with a tiny route).</summary>
+    [HttpGet]
+    public async Task<object> Get(CancellationToken ct)
+    {
+        var configured = !string.Equals(options.Value.Provider, "StraightLine", StringComparison.OrdinalIgnoreCase);
+        if (!configured)
+            return new { provider = options.Value.Provider, baseUrl = (string?)null, mode = "straight-line" };
+
+        var probe = await router.GetRouteAsync(ProbeFrom, ProbeTo, ct);
+        return new
+        {
+            provider = options.Value.Provider,
+            baseUrl = options.Value.BaseUrl,
+            mode = probe.IsStraightLine ? "straight-line (routing engine unreachable)" : "streets"
+        };
+    }
 }

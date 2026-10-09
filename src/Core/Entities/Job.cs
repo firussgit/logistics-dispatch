@@ -13,6 +13,15 @@ public class Job
     public Location CurrentLocation { get; set; }
     public int? EtaSeconds { get; set; }
     public double Progress { get; set; }
+
+    /// <summary>Road path driver→pickup, set shortly after assignment. JSON <c>[[lat,lng],…]</c>.</summary>
+    public string? ApproachRouteJson { get; set; }
+
+    /// <summary>Road path pickup→dropoff, set shortly after creation. JSON <c>[[lat,lng],…]</c>.</summary>
+    public string? TripRouteJson { get; set; }
+
+    /// <summary>Distance the driver has covered along <see cref="ApproachRouteJson"/>.</summary>
+    public double ApproachMeters { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? AssignedAt { get; set; }

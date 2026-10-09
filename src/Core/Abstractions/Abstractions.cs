@@ -30,6 +30,7 @@ public interface IDispatchNotifier
     Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default);
     Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default);
     Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default);
+    Task RouteReadyAsync(RouteReadyEvent e, CancellationToken ct = default);
 }
 
 public interface IOfferRepository

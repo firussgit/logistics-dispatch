@@ -137,8 +137,26 @@
     renderTiles();
   }
 
+  // ---------- routing badge ----------
+  async function refreshRoutingBadge() {
+    const b = $('routing');
+    try {
+      const r = await api('/api/routing');
+      const streets = r.mode === 'streets';
+      b.className = `conn routing ${streets ? 'streets' : 'straight'}`;
+      b.textContent = streets ? 'Street routes' : 'Straight-line routes';
+      b.title = streets
+        ? `Driver paths from ${r.provider} at ${r.baseUrl}`
+        : r.provider === 'StraightLine'
+          ? 'Routing is turned off in appsettings (Routing:Provider)'
+          : `Routing engine unreachable at ${r.baseUrl} — run routing/setup.ps1`;
+    } catch { b.className = 'conn routing'; b.textContent = 'routing ?'; }
+  }
+  setInterval(refreshRoutingBadge, 10000);
+
   // ---------- data ----------
   async function resync() {
+    refreshRoutingBadge();
     const [js, ds, os] = await Promise.all([api('/api/jobs'), api('/api/drivers'), api('/api/offers?status=pending')]);
     jobs.clear(); js.forEach((j) => jobs.set(j.id, j));
     drivers.clear(); ds.forEach((d) => drivers.set(d.id, d));
@@ -160,6 +178,7 @@
   const setConn = (cls, text) => { const c = $('conn'); c.className = `conn ${cls}`; c.textContent = text; };
   const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
 
+  conn.on('RouteReady', (e) => map.loadRoute(e.jobId, true));
   conn.on('OfferCreated', (o) => onOffer(o, true));
   conn.on('OfferUpdated', (o) => onOffer(o, false));
   conn.on('JobCreated', (j) => { jobs.set(j.id, j); map.setJob(j); renderJobs(); logActivity(`${j.reference} created for ${j.customerName}`); });
