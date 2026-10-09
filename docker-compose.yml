@@ -1,0 +1,23 @@
+# docker compose up --build                      -> the app on http://localhost:8080 (straight-line routes)
+# docker compose --profile routing up --build    -> also starts OSRM for real road routes (run routing/setup.ps1 once first)
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      Routing__BaseUrl: http://osrm:5000
+    volumes:
+      - dispatch-data:/data
+    restart: unless-stopped
+
+  osrm:
+    profiles: ["routing"]
+    image: osrm/osrm-backend:latest
+    command: osrm-routed --algorithm mld --max-matching-size 100 /data/area.osrm
+    volumes:
+      - ./routing/data:/data:ro
+    restart: unless-stopped
+
+volumes:
+  dispatch-data:

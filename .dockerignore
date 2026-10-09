@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/*.db
+**/*.db-*
+.git/
+routing/data/
+docs/
+tests/
+*.md

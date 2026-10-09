@@ -42,6 +42,18 @@ Open <http://localhost:5080> (dispatcher console with a live map). Click a job r
 nearest idle driver and drive to its destination. Open a second tab to see both update live.
 The SQLite database (`dispatch.db`) is created and seeded with 5 drivers on first start.
 
+### Run with Docker
+
+```bash
+docker compose up --build                      # app on http://localhost:8080, straight-line routes
+docker compose --profile routing up --build    # also starts OSRM for real road routes
+```
+
+The road-routing profile needs the map data first: run `routing/setup.ps1` once (see [routing/README.md](routing/README.md)).
+Orders and accounts live in the `dispatch-data` volume, so they survive restarts; `docker compose down -v` wipes them.
+The image runs in Production mode but keeps the demo accounts on (set `Seed__DemoUsers=false` for anything public).
+It serves plain HTTP, so put it behind an HTTPS proxy and make the cookie `Secure` before exposing it.
+
 ## Accounts & roles
 
 Every API call and the dispatch hub need a signed-in user (HttpOnly cookie session); `login.html` is the front door and sends
