@@ -8,6 +8,9 @@ public class Driver
     public Location CurrentLocation { get; set; }
     public Guid? ActiveJobId { get; set; }
 
+    /// <summary>Simulated drivers answer job offers on their own; a human driver answers through the driver page.</summary>
+    public bool IsAutomated { get; set; } = true;
+
     /// <summary>Optimistic concurrency token, bumped by the DbContext on every update.</summary>
     public long Version { get; set; }
 

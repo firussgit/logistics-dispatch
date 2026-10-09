@@ -28,6 +28,11 @@ public class JobsController(DispatchService dispatch, IJobRepository jobs) : Con
     [HttpPost("{id:guid}/assign")]
     public Task<JobDto> Assign(Guid id, AssignJobRequest req, CancellationToken ct) => dispatch.AssignAsync(id, req.DriverId!.Value, ct);
 
+    /// <summary>Dispatcher manually offers a Pending job to a specific driver.</summary>
+    [HttpPost("{id:guid}/offer")]
+    public Task<OfferDto> Offer(Guid id, AssignJobRequest req, [FromServices] Microsoft.Extensions.Options.IOptions<LogisticsDispatch.Infrastructure.Simulation.SimulationOptions> sim, CancellationToken ct) =>
+        dispatch.OfferJobAsync(id, req.DriverId!.Value, sim.Value.OfferTimeout, ct);
+
     [HttpPost("{id:guid}/accept")]
     public Task<JobDto> Accept(Guid id, CancellationToken ct) => dispatch.StartTransitAsync(id, ct);
 
@@ -67,4 +72,25 @@ public class StatusController(IJobRepository jobs, IDriverRepository drivers) : 
             allDrivers.Count(d => d.Status == DriverStatus.Offline),
             etas.Count > 0 ? etas.Average() : null);
     }
+}
+
+[ApiController]
+[Route("api/offers")]
+public class OffersController(DispatchService dispatch) : ControllerBase
+{
+    /// <summary>Offers, newest first. Defaults to open (Pending) offers; pass status=all for history.</summary>
+    [HttpGet]
+    public Task<IReadOnlyList<OfferDto>> List([FromQuery] string? status, [FromQuery] Guid? driverId, CancellationToken ct)
+    {
+        OfferStatus? parsed = string.Equals(status, "all", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : Enum.TryParse<OfferStatus>(status, true, out var s) ? s : OfferStatus.Pending;
+        return dispatch.ListOffersAsync(parsed, driverId, ct);
+    }
+
+    [HttpPost("{id:guid}/accept")]
+    public Task<JobDto> Accept(Guid id, CancellationToken ct) => dispatch.AcceptOfferAsync(id, ct);
+
+    [HttpPost("{id:guid}/decline")]
+    public Task<OfferDto> Decline(Guid id, CancellationToken ct) => dispatch.DeclineOfferAsync(id, ct);
 }

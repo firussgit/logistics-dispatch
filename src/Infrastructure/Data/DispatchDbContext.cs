@@ -8,6 +8,7 @@ public class DispatchDbContext(DbContextOptions<DispatchDbContext> options) : Db
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<StatusHistory> StatusHistory => Set<StatusHistory>();
+    public DbSet<JobOffer> Offers => Set<JobOffer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DispatchDbContext).Assembly);
@@ -28,6 +29,7 @@ public class DispatchDbContext(DbContextOptions<DispatchDbContext> options) : Db
             {
                 case Job:
                 case Driver:
+                case JobOffer:
                     var prop = entry.Property("Version");
                     prop.CurrentValue = (long)prop.OriginalValue! + 1;
                     break;

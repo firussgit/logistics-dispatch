@@ -26,6 +26,8 @@ public sealed class RecordingNotifier(IHubContext<DispatchHub> hub) : IDispatchN
     public Task JobStatusChangedAsync(JobStatusChangedEvent e, CancellationToken ct = default) { Events.Enqueue($"status:{e.Status}"); return _inner.JobStatusChangedAsync(e, ct); }
     public Task JobProgressAsync(JobProgressEvent e, CancellationToken ct = default) { Events.Enqueue("progress"); return _inner.JobProgressAsync(e, ct); }
     public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) { Events.Enqueue($"driver:{driver.Status}"); return _inner.DriverUpdatedAsync(driver, ct); }
+    public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Enqueue("offer:created"); return _inner.OfferCreatedAsync(offer, ct); }
+    public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Enqueue($"offer:{offer.Status}"); return _inner.OfferUpdatedAsync(offer, ct); }
 }
 
 /// <summary>Boots the real app against a throwaway SQLite file. Simulation is off unless requested.</summary>
@@ -37,6 +39,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     public ApiFactory() : this(false) { }
     protected ApiFactory(bool simulation) => _simulation = simulation;
 
+    /// <summary>Per-fixture overrides applied last (e.g. offer mode).</summary>
+    protected virtual IEnumerable<(string, string)> ExtraSettings => [];
+
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"dispatch-test-{Guid.NewGuid():N}.db");
 
     public RecordingNotifier Notifier => Services.GetRequiredService<RecordingNotifier>();
@@ -47,9 +52,11 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Dispatch", $"Data Source={_dbPath}");
         builder.UseSetting("Simulation:Enabled", _simulation.ToString());
         builder.UseSetting("Simulation:AutoAssign", _simulation.ToString());
+        builder.UseSetting("Simulation:UseOffers", "false"); // appsettings.json enables offers; most tests want instant assignment
         builder.UseSetting("Simulation:TickInterval", "00:00:00.050");
         builder.UseSetting("Simulation:TimeScale", "1000");
         builder.UseSetting("Simulation:PickupDwell", "00:00:00");
+        foreach (var (key, value) in ExtraSettings) builder.UseSetting(key, value);
 
         builder.ConfigureTestServices(services =>
         {

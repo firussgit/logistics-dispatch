@@ -4,6 +4,7 @@ namespace LogisticsDispatch.Core.Services;
 public class DispatchService(
     IJobRepository jobs,
     IDriverRepository drivers,
+    IOfferRepository offers,
     IUnitOfWork uow,
     IDispatchNotifier notifier,
     TimeProvider time)
@@ -19,6 +20,82 @@ public class DispatchService(
         return dto;
     }
 
+    // ---------------------------------------------------------------- offers
+
+    /// <summary>Proposes a Pending job to one idle driver for a limited time.</summary>
+    public async Task<OfferDto> OfferJobAsync(Guid jobId, Guid driverId, TimeSpan ttl, CancellationToken ct = default)
+    {
+        var job = await GetJobAsync(jobId, ct);
+        var driver = await drivers.GetAsync(driverId, ct) ?? throw new NotFoundException("Driver", driverId);
+        var now = time.GetUtcNow();
+
+        if (job.Status != JobStatus.Pending) throw new InvalidJobTransitionException(job.Status, "offer");
+        if (driver.Status != DriverStatus.Idle) throw new DriverUnavailableException(driver.Id, driver.Status);
+        if ((await offers.ListForJobAsync(jobId, ct)).Any(o => o.Status == OfferStatus.Pending && o.ExpiresAt > now))
+            throw new ConcurrencyConflictException($"Job {job.Reference} already has an open offer.");
+
+        var offer = JobOffer.Create(jobId, driverId, now, ttl);
+        offers.Add(offer);
+        await uow.SaveChangesAsync(ct);
+
+        var dto = OfferDto.From(offer, job, driver);
+        await notifier.OfferCreatedAsync(dto, ct);
+        return dto;
+    }
+
+    /// <summary>The driver takes the job: offer accepted, job assigned, driver busy, competing offers withdrawn.</summary>
+    public async Task<JobDto> AcceptOfferAsync(Guid offerId, CancellationToken ct = default)
+    {
+        var offer = await GetOfferAsync(offerId, ct);
+        var job = await GetJobAsync(offer.JobId, ct);
+        var driver = await drivers.GetAsync(offer.DriverId, ct) ?? throw new NotFoundException("Driver", offer.DriverId);
+        var now = time.GetUtcNow();
+
+        // Validate everything before mutating so a rejected accept changes nothing.
+        if (offer.Status != OfferStatus.Pending || now >= offer.ExpiresAt) { offer.Accept(now); /* throws OfferNotActive */ }
+        if (job.Status != JobStatus.Pending) throw new InvalidJobTransitionException(job.Status, "assign");
+        if (driver.Status != DriverStatus.Idle) throw new DriverUnavailableException(driver.Id, driver.Status);
+
+        offer.Accept(now);
+        job.Assign(driver.Id, now);
+        driver.MarkBusy(job.Id);
+        var withdrawn = await CancelOpenOffersAsync(job.Id, except: offer.Id, now, ct);
+        await uow.SaveChangesAsync(ct);
+
+        await PublishOfferAsync(offer, job, driver, ct);
+        foreach (var o in withdrawn) await PublishOfferAsync(o, job, null, ct);
+        await PublishStatusAsync(job, ct);
+        await notifier.DriverUpdatedAsync(DriverDto.From(driver), ct);
+        return JobDto.From(job);
+    }
+
+    public async Task<OfferDto> DeclineOfferAsync(Guid offerId, CancellationToken ct = default)
+    {
+        var offer = await GetOfferAsync(offerId, ct);
+        offer.Decline(time.GetUtcNow());
+        await uow.SaveChangesAsync(ct);
+        return await PublishOfferAsync(offer, null, null, ct);
+    }
+
+    /// <summary>Marks an unanswered offer as timed out. Safe to call on an offer that was already answered.</summary>
+    public async Task ExpireOfferAsync(Guid offerId, CancellationToken ct = default)
+    {
+        var offer = await GetOfferAsync(offerId, ct);
+        if (!offer.Expire(time.GetUtcNow())) return;
+        await uow.SaveChangesAsync(ct);
+        await PublishOfferAsync(offer, null, null, ct);
+    }
+
+    public async Task<IReadOnlyList<OfferDto>> ListOffersAsync(OfferStatus? status, Guid? driverId, CancellationToken ct = default)
+    {
+        var list = await offers.ListAsync(status, driverId, ct);
+        var result = new List<OfferDto>(list.Count);
+        foreach (var o in list) result.Add(await BuildOfferDtoAsync(o, null, null, ct));
+        return result;
+    }
+
+    // ------------------------------------------------------------ job steps
+
     public async Task<JobDto> AssignAsync(Guid jobId, Guid driverId, CancellationToken ct = default)
     {
         var job = await GetJobAsync(jobId, ct);
@@ -26,10 +103,13 @@ public class DispatchService(
 
         // Validate before mutating anything so a rejected request leaves both aggregates untouched.
         if (driver.Status != DriverStatus.Idle) throw new DriverUnavailableException(driver.Id, driver.Status);
-        job.Assign(driverId, time.GetUtcNow());
+        var now = time.GetUtcNow();
+        job.Assign(driverId, now);
         driver.MarkBusy(job.Id);
+        var withdrawn = await CancelOpenOffersAsync(job.Id, except: null, now, ct);
         await uow.SaveChangesAsync(ct);
 
+        foreach (var o in withdrawn) await PublishOfferAsync(o, job, null, ct);
         await PublishStatusAsync(job, ct);
         await notifier.DriverUpdatedAsync(DriverDto.From(driver), ct);
         return JobDto.From(job);
@@ -104,7 +184,8 @@ public class DispatchService(
     {
         var job = await GetJobAsync(jobId, ct);
         var driverId = job.DriverId;
-        job.Cancel(time.GetUtcNow(), reason);
+        var now = time.GetUtcNow();
+        job.Cancel(now, reason);
 
         Driver? driver = null;
         if (driverId is { } id)
@@ -112,8 +193,10 @@ public class DispatchService(
             driver = await drivers.GetAsync(id, ct);
             driver?.MarkIdle();
         }
+        var withdrawn = await CancelOpenOffersAsync(job.Id, except: null, now, ct);
         await uow.SaveChangesAsync(ct);
 
+        foreach (var o in withdrawn) await PublishOfferAsync(o, job, null, ct);
         await PublishStatusAsync(job, ct);
         if (driver is not null) await notifier.DriverUpdatedAsync(DriverDto.From(driver), ct);
         return JobDto.From(job);
@@ -125,13 +208,41 @@ public class DispatchService(
         return JobDto.From(job, includeHistory: true);
     }
 
+    // -------------------------------------------------------------- helpers
+
     private async Task<Job> GetJobAsync(Guid id, CancellationToken ct) =>
         await jobs.GetAsync(id, ct) ?? throw new NotFoundException("Job", id);
+
+    private async Task<JobOffer> GetOfferAsync(Guid id, CancellationToken ct) =>
+        await offers.GetAsync(id, ct) ?? throw new NotFoundException("Offer", id);
 
     private async Task<Driver> RequireDriverAsync(Job job, CancellationToken ct) =>
         job.DriverId is { } id
             ? await drivers.GetAsync(id, ct) ?? throw new NotFoundException("Driver", id)
             : throw new InvalidOperationException($"Job {job.Id} has no driver.");
+
+    /// <summary>Withdraws every still-open offer on a job (job assigned, taken, or cancelled).</summary>
+    private async Task<List<JobOffer>> CancelOpenOffersAsync(Guid jobId, Guid? except, DateTimeOffset now, CancellationToken ct)
+    {
+        var withdrawn = new List<JobOffer>();
+        foreach (var o in await offers.ListForJobAsync(jobId, ct))
+            if (o.Id != except && o.Cancel(now)) withdrawn.Add(o);
+        return withdrawn;
+    }
+
+    private async Task<OfferDto> BuildOfferDtoAsync(JobOffer offer, Job? job, Driver? driver, CancellationToken ct)
+    {
+        job ??= await GetJobAsync(offer.JobId, ct);
+        driver ??= await drivers.GetAsync(offer.DriverId, ct) ?? throw new NotFoundException("Driver", offer.DriverId);
+        return OfferDto.From(offer, job, driver);
+    }
+
+    private async Task<OfferDto> PublishOfferAsync(JobOffer offer, Job? job, Driver? driver, CancellationToken ct)
+    {
+        var dto = await BuildOfferDtoAsync(offer, job?.Id == offer.JobId ? job : null, driver?.Id == offer.DriverId ? driver : null, ct);
+        await notifier.OfferUpdatedAsync(dto, ct);
+        return dto;
+    }
 
     private Task PublishStatusAsync(Job job, CancellationToken ct) =>
         notifier.JobStatusChangedAsync(new JobStatusChangedEvent(job.Id, job.Reference, job.Status, job.DriverId, job.UpdatedAt), ct);

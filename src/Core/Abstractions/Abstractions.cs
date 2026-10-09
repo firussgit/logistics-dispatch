@@ -28,4 +28,16 @@ public interface IDispatchNotifier
     Task JobStatusChangedAsync(JobStatusChangedEvent e, CancellationToken ct = default);
     Task JobProgressAsync(JobProgressEvent e, CancellationToken ct = default);
     Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default);
+    Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default);
+    Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default);
+}
+
+public interface IOfferRepository
+{
+    void Add(JobOffer offer);
+    Task<JobOffer?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<JobOffer>> ListAsync(OfferStatus? status = null, Guid? driverId = null, CancellationToken ct = default);
+    Task<IReadOnlyList<JobOffer>> ListForJobAsync(Guid jobId, CancellationToken ct = default);
+    /// <summary>Every offer created at or after <paramref name="since"/> (used for cooldown/expiry sweeps).</summary>
+    Task<IReadOnlyList<JobOffer>> ListSinceAsync(DateTimeOffset since, CancellationToken ct = default);
 }

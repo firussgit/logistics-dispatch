@@ -9,6 +9,15 @@ public enum JobStatus
     Cancelled
 }
 
+public enum OfferStatus
+{
+    Pending,
+    Accepted,
+    Declined,
+    Expired,
+    Cancelled
+}
+
 public enum DriverStatus
 {
     Idle,

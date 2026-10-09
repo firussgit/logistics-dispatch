@@ -18,6 +18,20 @@ Open <http://localhost:5080> (dispatcher console with a live map). Click a job r
 nearest idle driver and drive to its destination. Open a second tab to see both update live.
 The SQLite database (`dispatch.db`) is created and seeded with 5 drivers on first start.
 
+## Driver offers
+
+With `Simulation:UseOffers` on (the default in `appsettings.json`) jobs are no longer assigned instantly. Each Pending job is
+**offered** to the nearest idle driver, who has `OfferTimeout` (20 s) to answer:
+
+- **Accept** → job assigned, driver busy, any competing offers withdrawn.
+- **Decline** or **no answer** → the offer closes and the job goes to the next-nearest driver. That driver is skipped for that
+  job for `DeclineCooldown` (30 s), so offers cascade through the fleet instead of ping-ponging.
+- A dispatcher assigning or cancelling the job withdraws any open offer.
+
+Five drivers are simulated and answer on their own (2–6 s, ~75 % accept). **"You (Demo Driver)"** is human: open
+`driver.html` (linked from the dispatcher's driver list) to receive offers live, with payout, distances and a countdown.
+Turn `UseOffers` off to get the old instant auto-assign.
+
 ## Test
 
 ```bash
@@ -51,10 +65,13 @@ Key decisions:
 | `GET /api/jobs?status=` · `GET /api/jobs/{id}` | List / detail with status history |
 | `POST /api/jobs/{id}/assign` `{driverId}` | Assign a driver (409 on busy driver, wrong state, or lost race) |
 | `POST /api/jobs/{id}/accept` · `/complete` · `/cancel` | Lifecycle transitions |
+| `POST /api/jobs/{id}/offer` `{driverId}` | Dispatcher manually offers a Pending job to one driver |
+| `GET /api/offers?status=| `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |driverId=` | Open offers by default (`status=all` for history) |
+| `POST /api/offers/{id}/accept` · `/decline` | Driver answers an offer (409 if expired/withdrawn/already answered) |
 | `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |
 
 Hub: `/hubs/dispatch` — methods `JoinDispatchGroup(group)`, `LeaveDispatchGroup(group)`, `SendStatusUpdate(update)`;
-events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`. Sample requests: `src/Api/Api.http`.
+events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`. Sample requests: `src/Api/Api.http`.
 
 ## Switching to SQL Server
 

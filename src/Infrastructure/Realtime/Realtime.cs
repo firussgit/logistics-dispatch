@@ -9,6 +9,8 @@ public static class HubEvents
     public const string JobStatusChanged = "JobStatusChanged";
     public const string JobProgress = "JobProgress";
     public const string DriverUpdated = "DriverUpdated";
+    public const string OfferCreated = "OfferCreated";
+    public const string OfferUpdated = "OfferUpdated";
     public const string DispatchGroup = "dispatchers";
 }
 
@@ -56,6 +58,8 @@ public class SignalRDispatchNotifier(IHubContext<DispatchHub> hub, ILogger<Signa
     }
     public Task JobProgressAsync(JobProgressEvent e, CancellationToken ct = default) => SendAsync(HubEvents.JobProgress, e, ct);
     public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) => SendAsync(HubEvents.DriverUpdated, driver, ct);
+    public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) => SendAsync(HubEvents.OfferCreated, offer, ct);
+    public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) => SendAsync(HubEvents.OfferUpdated, offer, ct);
 
     private async Task SendAsync(string method, object payload, CancellationToken ct)
     {

@@ -45,6 +45,47 @@
   function driverName(id) { return id ? (drivers.get(id)?.name ?? id.slice(0, 8)) : '—'; }
   const fmtEta = (s) => (s == null ? '—' : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`);
 
+  // ---------- offers ----------
+  const offers = new Map(); // open (Pending) offers by id
+
+  const secsLeft = (o) => Math.max(0, Math.ceil((Date.parse(o.expiresAt) - Date.now()) / 1000));
+  const openOfferFor = (jobId) => [...offers.values()].find((o) => o.jobId === jobId && Date.parse(o.expiresAt) > Date.now());
+  const offerNoteText = (o) => `Offered to ${driverName(o.driverId)} · ${secsLeft(o)}s`;
+
+  // live countdown on pending rows without re-rendering the table
+  setInterval(() => {
+    document.querySelectorAll('.offer-note').forEach((n) => {
+      const left = Math.max(0, Math.ceil((Date.parse(n.dataset.expires) - Date.now()) / 1000));
+      n.textContent = `Offered to ${n.dataset.driver} · ${left}s`;
+    });
+  }, 500);
+
+  const activity = [];
+  function logActivity(text, kind = '') {
+    activity.unshift({ at: new Date(), text, kind });
+    activity.length = Math.min(activity.length, 14);
+    $('activity').replaceChildren(...activity.map((a) => el('li', { className: a.kind },
+      el('time', { textContent: a.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }),
+      document.createTextNode(a.text))));
+  }
+
+  function onOffer(o, created) {
+    const who = driverName(o.driverId);
+    if (o.status === 'Pending') {
+      offers.set(o.id, o);
+      if (created) logActivity(`${o.reference} offered to ${who} (${money(o.payout)})`, 'offer');
+    } else {
+      const had = offers.delete(o.id);
+      if (had || !created) {
+        const verb = { Accepted: 'accepted', Declined: 'declined', Expired: 'did not answer', Cancelled: 'offer withdrawn for' }[o.status];
+        logActivity(o.status === 'Cancelled' ? `${o.reference}: offer to ${who} withdrawn` : `${who} ${verb} ${o.reference}`, o.status.toLowerCase());
+      }
+    }
+    renderJobs();
+  }
+
+  const money = (v) => `$${Number(v).toFixed(2)}`;
+
   function jobRow(j) {
     const tr = el('tr', { className: 'clickable' });
     tr.onclick = (ev) => { if (!ev.target.closest('select,button,a')) map.focusJob(j, j.driverId); };
@@ -54,6 +95,13 @@
 
     const driverCell = el('td');
     if (j.status === 'Pending') {
+      const open = openOfferFor(j.id);
+      if (open) {
+        const note = el('div', { className: 'offer-note', textContent: offerNoteText(open) });
+        note.dataset.expires = open.expiresAt;
+        note.dataset.driver = driverName(open.driverId);
+        driverCell.append(note);
+      }
       const sel = el('select');
       sel.append(el('option', { value: '', textContent: 'Assign…' }));
       [...drivers.values()].filter((d) => d.status === 'Idle').forEach((d) => sel.append(el('option', { value: d.id, textContent: d.name })));
@@ -82,17 +130,19 @@
 
   function renderDrivers() {
     $('drivers').replaceChildren(...[...drivers.values()].map((d) => el('li', {},
-      el('div', {}, el('span', { className: `dot ${d.status.toLowerCase()}` }), d.name,
-        el('small', { textContent: `${d.currentLocation.lat.toFixed(4)}, ${d.currentLocation.lng.toFixed(4)}` })),
+      el('div', {}, el('span', { className: `dot ${d.status.toLowerCase()}` }),
+        d.isAutomated ? document.createTextNode(d.name) : el('a', { className: 'link', href: `driver.html?id=${d.id}`, target: '_blank', textContent: `${d.name} ↗` }),
+        el('small', { textContent: d.isAutomated ? 'simulated driver' : 'human driver · open driver app' })),
       el('span', { textContent: d.status }))));
     renderTiles();
   }
 
   // ---------- data ----------
   async function resync() {
-    const [js, ds] = await Promise.all([api('/api/jobs'), api('/api/drivers')]);
+    const [js, ds, os] = await Promise.all([api('/api/jobs'), api('/api/drivers'), api('/api/offers?status=pending')]);
     jobs.clear(); js.forEach((j) => jobs.set(j.id, j));
     drivers.clear(); ds.forEach((d) => drivers.set(d.id, d));
+    offers.clear(); os.forEach((o) => offers.set(o.id, o));
     renderDrivers(); renderJobs();
     drivers.forEach((d) => map.setDriver(d));
     jobs.forEach((j) => map.setJob(j));
@@ -110,7 +160,9 @@
   const setConn = (cls, text) => { const c = $('conn'); c.className = `conn ${cls}`; c.textContent = text; };
   const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
 
-  conn.on('JobCreated', (j) => { jobs.set(j.id, j); map.setJob(j); renderJobs(); });
+  conn.on('OfferCreated', (o) => onOffer(o, true));
+  conn.on('OfferUpdated', (o) => onOffer(o, false));
+  conn.on('JobCreated', (j) => { jobs.set(j.id, j); map.setJob(j); renderJobs(); logActivity(`${j.reference} created for ${j.customerName}`); });
   conn.on('JobStatusChanged', (e) => refreshJob(e.jobId).catch(() => {}));
   conn.on('DriverUpdated', (d) => { drivers.set(d.id, d); map.setDriver(d); renderDrivers(); renderJobs(); });
   conn.on('JobProgress', (e) => {

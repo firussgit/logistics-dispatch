@@ -47,3 +47,25 @@ public class UnitOfWork(DispatchDbContext db) : IUnitOfWork
         }
     }
 }
+
+public class OfferRepository(DispatchDbContext db) : IOfferRepository
+{
+    public void Add(JobOffer offer) => db.Offers.Add(offer);
+
+    public Task<JobOffer?> GetAsync(Guid id, CancellationToken ct = default) =>
+        db.Offers.FirstOrDefaultAsync(o => o.Id == id, ct);
+
+    public async Task<IReadOnlyList<JobOffer>> ListAsync(OfferStatus? status = null, Guid? driverId = null, CancellationToken ct = default)
+    {
+        var query = db.Offers.AsQueryable();
+        if (status is { } s) query = query.Where(o => o.Status == s);
+        if (driverId is { } d) query = query.Where(o => o.DriverId == d);
+        return await query.OrderByDescending(o => o.CreatedAt).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<JobOffer>> ListForJobAsync(Guid jobId, CancellationToken ct = default) =>
+        await db.Offers.Where(o => o.JobId == jobId).OrderBy(o => o.CreatedAt).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<JobOffer>> ListSinceAsync(DateTimeOffset since, CancellationToken ct = default) =>
+        await db.Offers.Where(o => o.CreatedAt >= since).OrderBy(o => o.CreatedAt).ToListAsync(ct);
+}

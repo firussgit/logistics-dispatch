@@ -19,6 +19,7 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
                 NotFoundException => (StatusCodes.Status404NotFound, "Not found"),
                 InvalidJobTransitionException => (StatusCodes.Status409Conflict, "Invalid state transition"),
                 DriverUnavailableException => (StatusCodes.Status409Conflict, "Driver unavailable"),
+                OfferNotActiveException => (StatusCodes.Status409Conflict, "Offer no longer active"),
                 ConcurrencyConflictException => (StatusCodes.Status409Conflict, "Concurrency conflict"),
                 _ => (StatusCodes.Status500InternalServerError, "Unexpected error")
             };

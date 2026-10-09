@@ -15,3 +15,6 @@ public class ConcurrencyConflictException(string message, Exception? inner = nul
 
 public class NotFoundException(string entity, Guid id)
     : Exception($"{entity} {id} was not found.");
+
+public class OfferNotActiveException(Guid offerId, string reason)
+    : Exception($"Offer {offerId} can no longer be answered: {reason}.");

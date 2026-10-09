@@ -16,7 +16,7 @@ public class SimulationWorker(
     ILogger<SimulationWorker> logger) : BackgroundService
 {
     private static readonly Type[] ExpectedConflicts =
-        [typeof(ConcurrencyConflictException), typeof(InvalidJobTransitionException), typeof(DriverUnavailableException), typeof(NotFoundException)];
+        [typeof(ConcurrencyConflictException), typeof(InvalidJobTransitionException), typeof(DriverUnavailableException), typeof(NotFoundException), typeof(OfferNotActiveException)];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -54,9 +54,82 @@ public class SimulationWorker(
     public async Task TickAsync(CancellationToken ct)
     {
         var opts = options.Value;
-        if (opts.AutoAssign) await AutoAssignAsync(ct);
+        if (opts.UseOffers) await DispatchOffersAsync(opts, ct);
+        else if (opts.AutoAssign) await AutoAssignAsync(ct);
         await ApproachPickupAsync(opts, ct);
         await MoveInTransitAsync(opts, ct);
+    }
+
+    /// <summary>
+    /// Offer-based dispatch: (1) expire unanswered offers, (2) let simulated drivers answer, (3) offer each
+    /// Pending job to the nearest idle driver who isn't reserved or cooling down for that job.
+    /// </summary>
+    private async Task DispatchOffersAsync(SimulationOptions opts, CancellationToken ct)
+    {
+        var now = time.GetUtcNow();
+        var window = now - (opts.OfferTimeout + opts.DeclineCooldown);
+
+        // 1 + 2: sweep open offers
+        List<JobOffer> open;
+        Dictionary<Guid, Driver> driversById;
+        using (var scope = scopes.CreateScope())
+        {
+            open = (await scope.ServiceProvider.GetRequiredService<IOfferRepository>().ListAsync(OfferStatus.Pending, null, ct)).ToList();
+            driversById = (await scope.ServiceProvider.GetRequiredService<IDriverRepository>().ListAsync(ct)).ToDictionary(d => d.Id);
+        }
+
+        foreach (var offer in open)
+        {
+            if (offer.ExpiresAt <= now)
+            {
+                await RunAsync(offer.JobId, s => s.ExpireOfferAsync(offer.Id, ct));
+                continue;
+            }
+            if (!driversById.TryGetValue(offer.DriverId, out var driver) || !driver.IsAutomated) continue;
+
+            var (delay, accepts) = SimulatedDecision(offer.Id, opts);
+            if (now - offer.CreatedAt < delay) continue;
+            await RunAsync(offer.JobId, s => accepts ? s.AcceptOfferAsync(offer.Id, ct) : s.DeclineOfferAsync(offer.Id, ct));
+        }
+
+        // 3: make new offers
+        List<Job> pending;
+        List<JobOffer> recent;
+        List<Driver> idle;
+        using (var scope = scopes.CreateScope())
+        {
+            var sp = scope.ServiceProvider;
+            pending = (await sp.GetRequiredService<IJobRepository>().ListAsync(JobStatus.Pending, ct)).Reverse().ToList();
+            recent = (await sp.GetRequiredService<IOfferRepository>().ListSinceAsync(window, ct)).ToList();
+            idle = (await sp.GetRequiredService<IDriverRepository>().GetIdleAsync(ct)).ToList();
+        }
+
+        var reserved = recent.Where(o => o.Status == OfferStatus.Pending).Select(o => o.DriverId).ToHashSet();
+        foreach (var job in pending)
+        {
+            if (recent.Any(o => o.JobId == job.Id && o.Status == OfferStatus.Pending)) continue; // already out for an answer
+
+            var candidate = idle
+                .Where(d => !reserved.Contains(d.Id))
+                .Where(d => !recent.Any(o => o.JobId == job.Id && o.DriverId == d.Id &&
+                                             o.Status is OfferStatus.Declined or OfferStatus.Expired &&
+                                             now - (o.RespondedAt ?? o.ExpiresAt) < opts.DeclineCooldown))
+                .MinBy(d => GeoMath.DistanceMeters(d.CurrentLocation, job.Pickup));
+            if (candidate is null) continue;
+
+            reserved.Add(candidate.Id);
+            await RunAsync(job.Id, s => s.OfferJobAsync(job.Id, candidate.Id, opts.OfferTimeout, ct));
+        }
+    }
+
+    /// <summary>Deterministic per-offer "personality" so a simulated driver's behaviour is stable and testable.</summary>
+    private static (TimeSpan Delay, bool Accepts) SimulatedDecision(Guid offerId, SimulationOptions opts)
+    {
+        var bytes = offerId.ToByteArray();
+        var a = BitConverter.ToUInt32(bytes, 0) / (double)uint.MaxValue;
+        var b = BitConverter.ToUInt32(bytes, 4) / (double)uint.MaxValue;
+        var span = opts.SimulatedResponseMax - opts.SimulatedResponseMin;
+        return (opts.SimulatedResponseMin + span * a, b < opts.SimulatedAcceptRate);
     }
 
     private async Task AutoAssignAsync(CancellationToken ct)

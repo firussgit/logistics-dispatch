@@ -26,9 +26,9 @@ public record JobDto(
             : null);
 }
 
-public record DriverDto(Guid Id, string Name, DriverStatus Status, Location CurrentLocation, Guid? ActiveJobId)
+public record DriverDto(Guid Id, string Name, DriverStatus Status, Location CurrentLocation, Guid? ActiveJobId, bool IsAutomated)
 {
-    public static DriverDto From(Driver d) => new(d.Id, d.Name, d.Status, d.CurrentLocation, d.ActiveJobId);
+    public static DriverDto From(Driver d) => new(d.Id, d.Name, d.Status, d.CurrentLocation, d.ActiveJobId, d.IsAutomated);
 }
 
 public record JobStatusChangedEvent(Guid JobId, string Reference, JobStatus Status, Guid? DriverId, DateTimeOffset At);
@@ -41,3 +41,32 @@ public record SystemStatusDto(
     int BusyDrivers,
     int OfflineDrivers,
     double? AverageEtaSeconds);
+
+/// <summary>An offer plus just enough job context for a driver to decide.</summary>
+public record OfferDto(
+    Guid Id,
+    Guid JobId,
+    string Reference,
+    string CustomerName,
+    Guid DriverId,
+    OfferStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt,
+    Location Pickup,
+    Location Dropoff,
+    double DistanceToPickupMeters,
+    double TripMeters,
+    decimal Payout)
+{
+    public static OfferDto From(JobOffer o, Job job, Driver driver)
+    {
+        var toPickup = GeoMath.DistanceMeters(driver.CurrentLocation, job.Pickup);
+        var trip = GeoMath.DistanceMeters(job.Pickup, job.Dropoff);
+        return new OfferDto(o.Id, o.JobId, job.Reference, job.CustomerName, o.DriverId, o.Status, o.CreatedAt, o.ExpiresAt,
+            job.Pickup, job.Dropoff, toPickup, trip, CalculatePayout(toPickup, trip));
+    }
+
+    /// <summary>Simple demo pay model: base fare + per-km for the trip + a smaller per-km for the drive to pickup.</summary>
+    public static decimal CalculatePayout(double toPickupMeters, double tripMeters) =>
+        Math.Round(3m + 1.2m * (decimal)(tripMeters / 1000) + 0.4m * (decimal)(toPickupMeters / 1000), 2);
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driver</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    main.driver { max-width: 520px; }
+    .me { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .me h2 { margin: 0; font-size: 18px; }
+    .me small { color: var(--muted); display: block; }
+    .pill { padding: 3px 12px; border-radius: 99px; color: #fff; font-size: 12px; background: var(--completed); white-space: nowrap; }
+    .pill.busy { background: var(--assigned); } .pill.offline { background: var(--pending); }
+    #map { height: 280px; }
+    .offer { border: 2px solid var(--accent); }
+    .offer.closed { border-color: var(--border); opacity: .65; }
+    .offer .payout { font-size: 38px; font-weight: 800; line-height: 1; }
+    .offer .meta { display: flex; gap: 18px; margin: 10px 0 12px; color: var(--muted); }
+    .offer .meta b { display: block; color: var(--text); font-size: 16px; }
+    .timer { height: 10px; border-radius: 99px; background: var(--border); overflow: hidden; margin-bottom: 4px; }
+    .timer > i { display: block; height: 100%; background: var(--accent); transition: width .25s linear; }
+    .timer.low > i { background: var(--cancelled); }
+    .timer-text { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .actions button { padding: 14px; font-size: 16px; font-weight: 600; }
+    button.accept { background: var(--completed); border-color: var(--completed); color: #fff; }
+    button.decline { background: var(--card); }
+    .job-line { display: flex; justify-content: space-between; align-items: center; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center; }
+    .stats b { display: block; font-size: 20px; } .stats span { color: var(--muted); font-size: 12px; }
+    .hidden { display: none; }
+    .empty { color: var(--muted); text-align: center; padding: 18px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Driver</h1>
+    <span id="conn" class="conn offline">Connecting…</span>
+  </header>
+
+  <main class="driver">
+    <section class="card me" id="me"><span class="empty">Loading…</span></section>
+
+    <section class="card offer hidden" id="offer"></section>
+
+    <section class="card hidden" id="job"></section>
+
+    <section class="card" id="idle"><div class="empty">You're online. Waiting for the next delivery offer…</div></section>
+
+    <section class="card"><div id="map"></div></section>
+
+    <section class="card">
+      <div class="stats" id="stats"></div>
+    </section>
+  </main>
+
+  <div id="toasts"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="map.js"></script>
+  <script src="driver.js"></script>
+</body>
+</html>

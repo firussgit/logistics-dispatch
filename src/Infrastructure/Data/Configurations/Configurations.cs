@@ -48,3 +48,17 @@ public class StatusHistoryConfiguration : IEntityTypeConfiguration<StatusHistory
         b.Property(h => h.Note).HasMaxLength(500);
     }
 }
+
+public class JobOfferConfiguration : IEntityTypeConfiguration<JobOffer>
+{
+    public void Configure(EntityTypeBuilder<JobOffer> b)
+    {
+        b.HasKey(o => o.Id);
+        b.Property(o => o.Id).ValueGeneratedNever();
+        b.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
+        b.Property(o => o.Version).IsConcurrencyToken();
+        b.HasIndex(o => new { o.JobId, o.Status });
+        b.HasIndex(o => new { o.DriverId, o.Status });
+        b.HasIndex(o => o.CreatedAt);
+    }
+}

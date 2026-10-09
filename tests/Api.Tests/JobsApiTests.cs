@@ -105,6 +105,6 @@ public class JobsApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var status = await _client.GetFromJsonAsync<SystemStatusDto>("/api/status", ApiFactory.Json);
         Assert.Equal(pending!.Count, status!.JobsByStatus["Pending"]);
-        Assert.Equal(5, status.IdleDrivers + status.BusyDrivers + status.OfflineDrivers);
+        Assert.Equal((await factory.GetDriversAsync(_client)).Count, status.IdleDrivers + status.BusyDrivers + status.OfflineDrivers);
     }
 }
