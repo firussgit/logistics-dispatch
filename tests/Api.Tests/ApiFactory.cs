@@ -3,9 +3,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LogisticsDispatch.Core.Abstractions;
+using LogisticsDispatch.Core.Entities;
+using LogisticsDispatch.Core.Enums;
 using LogisticsDispatch.Core.Models;
+using LogisticsDispatch.Infrastructure.Data;
 using LogisticsDispatch.Infrastructure.Realtime;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.TestHost;
@@ -17,9 +21,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace LogisticsDispatch.Api.Tests;
 
 /// <summary>Decorates the real SignalR notifier and records everything that was published.</summary>
-public sealed class RecordingNotifier(IHubContext<DispatchHub> hub) : IDispatchNotifier
+public sealed class RecordingNotifier(IHubContext<DispatchHub> hub, IHubContext<TrackingHub> trackingHub) : IDispatchNotifier
 {
-    private readonly SignalRDispatchNotifier _inner = new(hub, NullLogger<SignalRDispatchNotifier>.Instance);
+    private readonly SignalRDispatchNotifier _inner = new(hub, trackingHub, NullLogger<SignalRDispatchNotifier>.Instance);
     public readonly ConcurrentQueue<string> Events = new();
 
     public Task JobCreatedAsync(JobDto job, CancellationToken ct = default) { Events.Enqueue("created"); return _inner.JobCreatedAsync(job, ct); }
@@ -35,6 +39,9 @@ public sealed class RecordingNotifier(IHubContext<DispatchHub> hub) : IDispatchN
 public class ApiFactory : WebApplicationFactory<Program>
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
+
+    /// <summary>Password of the seeded demo accounts in the test host.</summary>
+    public const string DemoPassword = "Test-Passw0rd!";
 
     private readonly bool _simulation;
     public ApiFactory() : this(false) { }
@@ -58,6 +65,9 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Simulation:TickInterval", "00:00:00.050");
         builder.UseSetting("Simulation:TimeScale", "1000");
         builder.UseSetting("Simulation:PickupDwell", "00:00:00");
+        builder.UseSetting("Seed:DemoUsers", "true");
+        builder.UseSetting("Seed:DemoPassword", DemoPassword);
+        builder.UseSetting("Auth:AttemptsPerMinute", "100000"); // the rate-limit test opts back in with its own factory
         foreach (var (key, value) in ExtraSettings) builder.UseSetting(key, value);
 
         builder.ConfigureTestServices(services =>
@@ -74,6 +84,56 @@ public class ApiFactory : WebApplicationFactory<Program>
         SqliteConnection.ClearAllPools();
         foreach (var f in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm", _dbPath + "-journal" })
             try { File.Delete(f); } catch { /* best effort */ }
+    }
+
+    // ---- signed-in clients ----
+
+    /// <summary>A client that has signed in as the given user (the cookie is kept by the client).</summary>
+    public HttpClient LoginClient(string email, string password = DemoPassword)
+    {
+        var client = CreateClient();
+        var res = client.PostAsJsonAsync("/api/auth/login", new { email, password }).GetAwaiter().GetResult();
+        res.EnsureSuccessStatusCode();
+        return client;
+    }
+
+    public HttpClient DispatcherClient() => LoginClient(DbSeeder.DemoDispatcherEmail);
+    public HttpClient DriverClient() => LoginClient(DbSeeder.DemoDriverEmail);
+    public HttpClient DemoCustomerClient() => LoginClient(DbSeeder.DemoCustomerEmail);
+
+    /// <summary>Registers a brand-new customer account and returns a signed-in client for it.</summary>
+    public async Task<(HttpClient Client, MeDto Me)> RegisterCustomerAsync(string name = "Test Customer")
+    {
+        var client = CreateClient();
+        var email = $"cust-{Guid.NewGuid():N}@example.test";
+        var res = await client.PostAsJsonAsync("/api/auth/register", new { email, displayName = name, password = "Abcdef12" });
+        res.EnsureSuccessStatusCode();
+        return (client, (await res.Content.ReadFromJsonAsync<MeDto>(Json))!);
+    }
+
+    /// <summary>Signs in on a throwaway client and returns the raw auth cookie, for SignalR connections.</summary>
+    public async Task<string> LoginCookieAsync(string email, string password = DemoPassword)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        var res = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        res.EnsureSuccessStatusCode();
+        var setCookie = res.Headers.GetValues("Set-Cookie").First(c => c.StartsWith("dispatch.auth="));
+        return setCookie.Split(';')[0];
+    }
+
+    public async Task<string> CustomerCookieAsync(MeDto me, string password = "Abcdef12") => await LoginCookieAsync(me.Email, password);
+
+    /// <summary>Adds a driver-role account bound to an existing driver, straight into the database.</summary>
+    public async Task<string> CreateDriverAccountAsync(Guid driverId)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DispatchDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+        var user = new User { Email = $"drv-{Guid.NewGuid():N}@example.test", DisplayName = "Extra Driver", Role = UserRole.Driver, DriverId = driverId, CreatedAt = DateTimeOffset.UtcNow };
+        user.PasswordHash = hasher.HashPassword(user, DemoPassword);
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Email;
     }
 
     // ---- helpers ----

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; }
+    .auth { width: min(420px, 94vw); }
+    .auth h1 { font-size: 22px; margin: 0 0 4px; }
+    .auth p.sub { color: var(--muted); margin: 0 0 16px; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+    .tabs button { padding: 8px; }
+    .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .auth form { display: grid; gap: 10px; }
+    .auth label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+    .auth input { width: 100%; padding: 9px 10px; }
+    .auth .submit { padding: 10px; font-weight: 600; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .error { background: color-mix(in srgb, var(--cancelled) 15%, transparent); color: var(--cancelled); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+    .demo { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); }
+    .demo h2 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 0 0 8px; }
+    .demo .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="auth card">
+    <h1>Dispatch</h1>
+    <p class="sub">Sign in to continue</p>
+
+    <div class="tabs">
+      <button type="button" id="tab-login" class="active">Sign in</button>
+      <button type="button" id="tab-register">Create account</button>
+    </div>
+
+    <form id="login-form" autocomplete="on">
+      <label>Email <input name="email" type="email" autocomplete="username" required maxlength="254"></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+      <div id="login-error" class="error hidden" role="alert"></div>
+      <button class="primary submit" type="submit">Sign in</button>
+    </form>
+
+    <form id="register-form" class="hidden" autocomplete="on">
+      <label>Your name <input name="displayName" autocomplete="name" required maxlength="60"></label>
+      <label>Email <input name="email" type="email" autocomplete="username" required maxlength="254"></label>
+      <label>Password <input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="200">
+        <span class="hint">At least 8 characters, with a letter and a digit.</span></label>
+      <div id="register-error" class="error hidden" role="alert"></div>
+      <button class="primary submit" type="submit">Create customer account</button>
+      <p class="hint">Accounts created here are customer accounts. Dispatcher and driver accounts are set up by the operator.</p>
+    </form>
+
+    <section id="demo" class="demo hidden">
+      <h2>Demo accounts (development only)</h2>
+      <div class="row" id="demo-buttons"></div>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

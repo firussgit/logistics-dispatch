@@ -13,8 +13,9 @@ public class LocationInput
 
 public class CreateJobRequest : IValidatableObject
 {
-    [Required, StringLength(100, MinimumLength = 1)]
-    public string CustomerName { get; set; } = "";
+    /// <summary>Required when a dispatcher books on someone's behalf; ignored for customers (their own name is used).</summary>
+    [StringLength(100)]
+    public string? CustomerName { get; set; }
 
     [StringLength(500)]
     public string? Notes { get; set; }
@@ -24,8 +25,6 @@ public class CreateJobRequest : IValidatableObject
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if (string.IsNullOrWhiteSpace(CustomerName))
-            yield return new ValidationResult("CustomerName must not be blank.", [nameof(CustomerName)]);
         if (Pickup is not null && Dropoff is not null && Pickup.Lat == Dropoff.Lat && Pickup.Lng == Dropoff.Lng)
             yield return new ValidationResult("Pickup and dropoff must differ.", [nameof(Dropoff)]);
     }
@@ -34,4 +33,25 @@ public class CreateJobRequest : IValidatableObject
 public class AssignJobRequest
 {
     [Required] public Guid? DriverId { get; set; }
+}
+
+public class LoginRequest
+{
+    [Required, StringLength(254)] public string Email { get; set; } = "";
+    [Required, StringLength(200)] public string Password { get; set; } = "";
+}
+
+public class RegisterRequest : IValidatableObject
+{
+    [Required, EmailAddress, StringLength(254)] public string Email { get; set; } = "";
+    [Required, StringLength(60, MinimumLength = 1)] public string DisplayName { get; set; } = "";
+    [Required, StringLength(200)] public string Password { get; set; } = "";
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(DisplayName))
+            yield return new ValidationResult("Name must not be blank.", [nameof(DisplayName)]);
+        if (Password.Length < 8 || !Password.Any(char.IsLetter) || !Password.Any(char.IsDigit))
+            yield return new ValidationResult("Password must be at least 8 characters and contain a letter and a digit.", [nameof(Password)]);
+    }
 }

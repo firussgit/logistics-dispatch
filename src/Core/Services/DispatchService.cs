@@ -9,9 +9,9 @@ public class DispatchService(
     IDispatchNotifier notifier,
     TimeProvider time)
 {
-    public async Task<JobDto> CreateJobAsync(string customerName, string? notes, Location pickup, Location dropoff, CancellationToken ct = default)
+    public async Task<JobDto> CreateJobAsync(string customerName, string? notes, Location pickup, Location dropoff, Guid? customerId = null, CancellationToken ct = default)
     {
-        var job = Job.Create(customerName, notes, pickup, dropoff, time.GetUtcNow());
+        var job = Job.Create(customerName, notes, pickup, dropoff, time.GetUtcNow(), customerId);
         jobs.Add(job);
         await uow.SaveChangesAsync(ct);
 
@@ -145,7 +145,7 @@ public class DispatchService(
         job.UpdatedAt = time.GetUtcNow();
         await uow.SaveChangesAsync(ct);
 
-        await notifier.JobProgressAsync(new JobProgressEvent(job.Id, location.Lat, location.Lng, etaSeconds, 0), ct);
+        await notifier.JobProgressAsync(new JobProgressEvent(job.Id, location.Lat, location.Lng, etaSeconds, 0, job.DriverId, job.CustomerId), ct);
     }
 
     /// <summary>Records a GPS/progress tick for an in-transit job and moves its driver.</summary>
@@ -163,7 +163,7 @@ public class DispatchService(
         driver.CurrentLocation = location;
         await uow.SaveChangesAsync(ct);
 
-        await notifier.JobProgressAsync(new JobProgressEvent(job.Id, location.Lat, location.Lng, etaSeconds, job.Progress), ct);
+        await notifier.JobProgressAsync(new JobProgressEvent(job.Id, location.Lat, location.Lng, etaSeconds, job.Progress, job.DriverId, job.CustomerId), ct);
     }
 
     public async Task<JobDto> CompleteAsync(Guid jobId, CancellationToken ct = default)
@@ -225,7 +225,7 @@ public class DispatchService(
             job.TripRouteJson = json;
         }
         await uow.SaveChangesAsync(ct);
-        await notifier.RouteReadyAsync(new RouteReadyEvent(job.Id, kind), ct);
+        await notifier.RouteReadyAsync(new RouteReadyEvent(job.Id, kind, job.DriverId, job.CustomerId), ct);
     }
 
     public async Task<RouteDto> GetRouteAsync(Guid jobId, CancellationToken ct = default)
@@ -237,6 +237,19 @@ public class DispatchService(
         var trip = RoutePath.Parse(job.TripRouteJson);
         // A two-point trip route means routing was unavailable and we fell back to a straight line.
         return new RouteDto(job.Id, Pairs(job.ApproachRouteJson), Pairs(job.TripRouteJson), trip is { Count: 2 });
+    }
+
+    /// <summary>Resolves a public tracking link. Returns null for an unknown or malformed token (never throws, never says why).</summary>
+    public async Task<TrackingDto?> GetTrackingAsync(string? token, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(token) || token.Length != 32) return null;
+        var job = await jobs.GetByTrackingTokenAsync(token.ToLowerInvariant(), ct);
+        if (job is null) return null;
+
+        var driver = job.DriverId is { } id ? await drivers.GetAsync(id, ct) : null;
+        var history = job.History.OrderBy(h => h.At).Select(h => new StatusHistoryDto(h.From, h.To, h.At, h.Note)).ToList();
+        return new TrackingDto(job.Id, job.Reference, job.Status, driver?.Name, driver?.CurrentLocation, job.Pickup, job.Dropoff,
+            job.CurrentLocation, job.EtaSeconds, job.Progress, job.CreatedAt, history);
     }
 
     public async Task<JobDto> GetJobDetailAsync(Guid jobId, CancellationToken ct = default)
@@ -282,5 +295,5 @@ public class DispatchService(
     }
 
     private Task PublishStatusAsync(Job job, CancellationToken ct) =>
-        notifier.JobStatusChangedAsync(new JobStatusChangedEvent(job.Id, job.Reference, job.Status, job.DriverId, job.UpdatedAt), ct);
+        notifier.JobStatusChangedAsync(new JobStatusChangedEvent(job.Id, job.Reference, job.Status, job.DriverId, job.UpdatedAt, job.CustomerId), ct);
 }

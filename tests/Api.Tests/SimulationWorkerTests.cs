@@ -14,7 +14,7 @@ public class SimulationWorkerTests : IClassFixture<SimulationWorkerTests.FastSim
     public SimulationWorkerTests(FastSimFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.DispatcherClient();
     }
 
     [Fact]

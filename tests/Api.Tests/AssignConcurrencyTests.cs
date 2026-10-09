@@ -6,7 +6,7 @@ namespace LogisticsDispatch.Api.Tests;
 
 public class AssignConcurrencyTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private readonly HttpClient _client = factory.CreateClient();
+    private readonly HttpClient _client = factory.DispatcherClient();
 
     [Fact]
     public async Task Same_job_assigned_to_two_drivers_concurrently_succeeds_exactly_once()

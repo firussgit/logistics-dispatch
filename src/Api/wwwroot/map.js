@@ -1,5 +1,5 @@
 // Shared Leaflet map used by the dispatcher console, the customer tracking page and the driver app.
-window.DispatchMap = function (elementId, { center = [40.7128, -74.006], zoom = 12 } = {}) {
+window.DispatchMap = function (elementId, { center = [40.7128, -74.006], zoom = 12, routeUrl = (id) => `/api/jobs/${id}/route` } = {}) {
   const map = L.map(elementId, { zoomControl: true }).setView(center, zoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -10,6 +10,7 @@ window.DispatchMap = function (elementId, { center = [40.7128, -74.006], zoom = 
   const jobs = new Map();      // jobId -> { job, group }
   const routes = new Map();    // jobId -> { approach: [[lat,lng]..]|null, trip: [...]|null, isStraightLine }
   const loading = new Set();   // jobIds with a route request in flight
+  const points = new Map();    // "pickup" or "dropoff" -> marker (customer order form)
   const ACTIVE = new Set(['Pending', 'Assigned', 'InTransit']);
 
   const pin = (cls, glyph, label) =>
@@ -85,7 +86,7 @@ window.DispatchMap = function (elementId, { center = [40.7128, -74.006], zoom = 
       if (loading.has(jobId) || (!force && routes.has(jobId))) return;
       loading.add(jobId);
       try {
-        const res = await fetch(`/api/jobs/${jobId}/route`);
+        const res = await fetch(routeUrl(jobId));
         if (!res.ok) return;
         const r = await res.json();
         if (!r.trip && !r.approach) return; // not computed yet; a RouteReady event will bring us back
@@ -96,6 +97,20 @@ window.DispatchMap = function (elementId, { center = [40.7128, -74.006], zoom = 
         loading.delete(jobId);
       }
     },
+
+    /** A single labelled pin (used by the customer order form to show the chosen pickup/dropoff). */
+    showPoint(kind, loc) {
+      points.get(kind)?.remove();
+      const label = kind === 'pickup' ? 'P' : 'D';
+      points.set(kind, L.marker(ll(loc), { icon: pin(kind, label, kind === 'pickup' ? 'Pickup' : 'Dropoff') }).addTo(map));
+    },
+
+    clearPoints() {
+      points.forEach((m) => m.remove());
+      points.clear();
+    },
+
+    hasDriver(id) { return drivers.has(id); },
 
     focusJob(j, driverId) {
       const pts = [ll(j.pickup), ll(j.dropoff)];

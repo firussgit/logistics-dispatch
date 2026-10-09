@@ -8,7 +8,7 @@ namespace LogisticsDispatch.Api.Tests;
 /// <summary>Manual offer flow over REST (simulation off, so nothing answers on its own).</summary>
 public class OffersApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private readonly HttpClient _client = factory.CreateClient();
+    private readonly HttpClient _client = factory.DispatcherClient();
 
     private async Task<(JobDto Job, DriverDto Driver, OfferDto Offer)> OfferNewJobAsync()
     {

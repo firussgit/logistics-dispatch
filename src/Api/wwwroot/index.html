@@ -10,7 +10,8 @@
 <body>
   <header>
     <h1>Dispatch Dashboard</h1>
-    <span style="display:flex;gap:8px;align-items:center">
+    <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <span id="userbox" class="userbox"></span>
       <span id="routing" class="conn routing" title="Routing engine for driver paths">routing…</span>
       <span id="conn" class="conn offline">Connecting…</span>
     </span>
@@ -58,6 +59,7 @@
   </main>
 
   <div id="toasts"></div>
+  <script src="auth.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="map.js"></script>

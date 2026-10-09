@@ -5,6 +5,9 @@ public interface IJobRepository
     void Add(Job job);
     Task<Job?> GetAsync(Guid id, CancellationToken ct = default);
     Task<Job?> GetWithHistoryAsync(Guid id, CancellationToken ct = default);
+    Task<Job?> GetByTrackingTokenAsync(string token, CancellationToken ct = default);
+    /// <summary>Jobs visible to one customer and/or one driver (newest first).</summary>
+    Task<IReadOnlyList<Job>> ListForUserAsync(JobStatus? status, Guid? customerId, Guid? driverId, CancellationToken ct = default);
     Task<IReadOnlyList<Job>> ListAsync(JobStatus? status = null, CancellationToken ct = default);
 }
 
@@ -41,4 +44,11 @@ public interface IOfferRepository
     Task<IReadOnlyList<JobOffer>> ListForJobAsync(Guid jobId, CancellationToken ct = default);
     /// <summary>Every offer created at or after <paramref name="since"/> (used for cooldown/expiry sweeps).</summary>
     Task<IReadOnlyList<JobOffer>> ListSinceAsync(DateTimeOffset since, CancellationToken ct = default);
+}
+
+public interface IUserRepository
+{
+    void Add(User user);
+    Task<User?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default);
 }

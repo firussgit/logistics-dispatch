@@ -1,10 +1,9 @@
+// Public delivery tracking. No account: the link's secret token is the only credential, and it unlocks exactly one delivery.
 (() => {
   const $ = (id) => document.getElementById(id);
-  const id = new URLSearchParams(location.search).get('id');
-  const GROUP = 'dispatchers';
-  const map = DispatchMap('map');
-  let job = null;
-  let driver = null;
+  const token = new URLSearchParams(location.search).get('t');
+  const map = DispatchMap('map', { routeUrl: () => `/api/track/${encodeURIComponent(token)}/route` });
+  let t = null; // TrackingDto
 
   const el = (tag, props = {}, ...kids) => {
     const n = Object.assign(document.createElement(tag), props);
@@ -21,71 +20,81 @@
   const fmtEta = (s) => (s == null ? '—' : s >= 60 ? `${Math.floor(s / 60)} min ${s % 60}s` : `${s}s`);
   const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-  async function getJson(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(r.status === 404 ? 'We could not find that delivery.' : `Error ${r.status}`);
+  async function getTracking() {
+    const r = await fetch(`/api/track/${encodeURIComponent(token)}`);
+    if (!r.ok) throw new Error(r.status === 404 ? 'We could not find that delivery. Check the link you were given.' : `Something went wrong (${r.status}).`);
     return r.json();
   }
 
   function renderSummary() {
     const s = $('summary');
     s.replaceChildren();
-    const left = el('div', {}, el('small', { textContent: job.reference }), el('h2', { textContent: `Delivery for ${job.customerName}` }),
-      el('small', { textContent: driver ? `Driver: ${driver.name}` : 'Driver: not assigned yet' }));
-    const etaText = job.status === 'Completed' ? 'Delivered' : job.status === 'Cancelled' ? 'Cancelled' : (job.status === 'InTransit' || job.status === 'Assigned') ? fmtEta(job.etaSeconds) : '—';
-    const etaLabel = job.status === 'InTransit' ? 'estimated arrival' : job.status === 'Assigned' ? 'driver reaches pickup in' : '';
-    const right = el('div', { className: 'eta' }, document.createTextNode(etaText), el('small', { textContent: etaLabel }));
-    s.append(el('div', { className: 'hero' }, left, right));
-    if (job.status === 'InTransit') {
+    const left = el('div', {}, el('small', { textContent: t.reference }), el('h2', { textContent: 'Your delivery' }),
+      el('small', { textContent: t.driverName ? `Driver: ${t.driverName}` : 'Driver: not assigned yet' }));
+    const moving = t.status === 'InTransit' || t.status === 'Assigned';
+    const etaText = t.status === 'Completed' ? 'Delivered' : t.status === 'Cancelled' ? 'Cancelled' : moving ? fmtEta(t.etaSeconds) : '—';
+    const etaLabel = t.status === 'InTransit' ? 'estimated arrival' : t.status === 'Assigned' ? 'driver reaches pickup in' : '';
+    s.append(el('div', { className: 'hero' }, left, el('div', { className: 'eta' }, document.createTextNode(etaText), el('small', { textContent: etaLabel }))));
+    if (t.status === 'InTransit') {
       const bar = el('div', { className: 'bar', style: 'width:100%;margin-top:12px' }, el('i'));
-      bar.firstChild.style.width = `${Math.round(job.progress * 100)}%`;
+      bar.firstChild.style.width = `${Math.round(t.progress * 100)}%`;
       s.append(bar);
     }
-    if (job.status === 'Cancelled') s.append(el('div', { className: 'cancelled-banner', textContent: 'This delivery was cancelled.' }));
+    if (t.status === 'Cancelled') s.append(el('div', { className: 'cancelled-banner', textContent: 'This delivery was cancelled.' }));
   }
 
   function renderTimeline() {
-    const at = Object.fromEntries((job.history || []).map((h) => [h.to, h.at]));
-    const idx = STEPS.findIndex(([s]) => s === job.status);
+    const at = Object.fromEntries((t.history || []).map((h) => [h.to, h.at]));
+    const idx = STEPS.findIndex(([s]) => s === t.status);
     $('timeline').replaceChildren(...STEPS.map(([status, title, sub], i) => {
-      const li = el('li', { className: job.status === 'Cancelled' ? (at[status] ? 'done' : '') : i < idx || job.status === 'Completed' ? 'done' : i === idx ? 'current' : '' });
+      const cls = t.status === 'Cancelled' ? (at[status] ? 'done' : '') : i < idx || t.status === 'Completed' ? 'done' : i === idx ? 'current' : '';
+      const li = el('li', { className: cls });
       li.append(el('span', { className: 'dot2' }), el('div', {}, document.createTextNode(title), el('small', { textContent: at[status] ? `${fmtTime(at[status])} · ${sub}` : sub })));
       return li;
     }));
   }
 
-  async function load() {
-    job = await getJson(`/api/jobs/${id}`);
-    driver = job.driverId ? (await getJson('/api/drivers')).find((d) => d.id === job.driverId) ?? null : driver;
-    if (driver) {
+  /** The map's job shape (it doesn't need, and we don't have, the customer's details). */
+  const mapJob = () => ({ id: t.id, status: t.status, reference: t.reference, customerName: '', pickup: t.pickup, dropoff: t.dropoff });
+
+  async function load(first = false) {
+    t = await getTracking();
+    if (t.driverName && t.driverLocation) {
       // While assigned or in transit the job's live position is the driver's position.
-      map.setDriver({ ...driver, currentLocation: job.status === 'InTransit' || job.status === 'Assigned' ? job.currentLocation : driver.currentLocation });
+      const here = t.status === 'InTransit' || t.status === 'Assigned' ? t.currentLocation : t.driverLocation;
+      map.setDriver({ id: 'driver', name: t.driverName, status: 'Busy', currentLocation: here });
     }
-    map.setJob(job);
-    map.focusJob(job, driver?.id);
+    map.setJob(mapJob());
+    if (first) map.focusJob(mapJob(), 'driver');
     renderSummary();
     renderTimeline();
   }
 
   const setConn = (cls, text) => { const c = $('conn'); c.className = `conn ${cls}`; c.textContent = text; };
-  const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/dispatch').withAutomaticReconnect().build();
+  const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/track').withAutomaticReconnect().build();
 
-  conn.on('JobStatusChanged', (e) => { if (e.jobId === id) load().catch(() => {}); });
-  conn.on('RouteReady', (e) => { if (e.jobId === id) map.loadRoute(id, true); });
+  conn.on('JobStatusChanged', (e) => { if (t && e.jobId === t.id) load().catch(() => {}); });
+  conn.on('RouteReady', (e) => { if (t && e.jobId === t.id) map.loadRoute(t.id, true); });
   conn.on('JobProgress', (e) => {
-    if (e.jobId !== id || !job) return;
-    Object.assign(job, { etaSeconds: e.etaSeconds, progress: e.progress, currentLocation: { lat: e.lat, lng: e.lng } });
-    if (job.driverId) map.moveDriver(job.driverId, e.lat, e.lng);
+    if (!t || e.jobId !== t.id) return;
+    Object.assign(t, { etaSeconds: e.etaSeconds, progress: e.progress, currentLocation: { lat: e.lat, lng: e.lng } });
+    map.moveDriver('driver', e.lat, e.lng);
     renderSummary();
   });
+
+  // The server forgets which delivery a connection follows when it drops, so ask again after every (re)connect.
+  async function follow() {
+    if (!(await conn.invoke('Track', token))) throw new Error('This tracking link is not valid.');
+    setConn('online', 'Live');
+  }
+
   conn.onreconnecting(() => setConn('reconnecting', 'Reconnecting…'));
   conn.onclose(() => setConn('offline', 'Offline'));
-  conn.onreconnected(async () => { setConn('online', 'Live'); await conn.invoke('JoinDispatchGroup', GROUP); await load(); });
+  conn.onreconnected(async () => { await follow(); await load(); });
 
   (async () => {
-    if (!id) { $('summary').textContent = 'No delivery specified. Use the tracking link you were given.'; return; }
-    try { await load(); } catch (e) { $('summary').textContent = e.message; return; }
-    try { await conn.start(); await conn.invoke('JoinDispatchGroup', GROUP); setConn('online', 'Live'); }
-    catch { setConn('offline', 'Offline'); }
+    if (!token) { $('summary').textContent = 'No delivery specified. Use the tracking link you were given.'; return; }
+    try { await load(true); } catch (e) { $('summary').textContent = e.message; setConn('offline', 'Not found'); return; }
+    try { await conn.start(); await follow(); } catch { setConn('offline', 'Offline'); }
   })();
 })();

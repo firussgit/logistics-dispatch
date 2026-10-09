@@ -4,6 +4,12 @@ public class Job
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Reference { get; set; } = "";
+
+    /// <summary>The customer account that placed the order; null for jobs created by a dispatcher on someone's behalf.</summary>
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>Unguessable secret that lets anyone with the link (and no login) follow this delivery.</summary>
+    public string TrackingToken { get; set; } = "";
     public string CustomerName { get; set; } = "";
     public string? Notes { get; set; }
     public Location Pickup { get; set; }
@@ -31,13 +37,15 @@ public class Job
 
     public List<StatusHistory> History { get; set; } = [];
 
-    public static Job Create(string customerName, string? notes, Location pickup, Location dropoff, DateTimeOffset now)
+    public static Job Create(string customerName, string? notes, Location pickup, Location dropoff, DateTimeOffset now, Guid? customerId = null)
     {
         var id = Guid.NewGuid();
         var job = new Job
         {
             Id = id,
             Reference = $"JOB-{id.ToString("N")[..6].ToUpperInvariant()}",
+            CustomerId = customerId,
+            TrackingToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(),
             CustomerName = customerName,
             Notes = notes,
             Pickup = pickup,

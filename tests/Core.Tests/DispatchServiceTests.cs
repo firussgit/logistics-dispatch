@@ -16,6 +16,9 @@ public class DispatchServiceTests
         public void Add(Job job) => Items.Add(job);
         public Task<Job?> GetAsync(Guid id, CancellationToken ct = default) => Task.FromResult(Items.FirstOrDefault(j => j.Id == id));
         public Task<Job?> GetWithHistoryAsync(Guid id, CancellationToken ct = default) => GetAsync(id, ct);
+        public Task<Job?> GetByTrackingTokenAsync(string token, CancellationToken ct = default) => Task.FromResult(Items.FirstOrDefault(j => j.TrackingToken == token));
+        public Task<IReadOnlyList<Job>> ListForUserAsync(JobStatus? status, Guid? customerId, Guid? driverId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<Job>>(Items.Where(j => (status is null || j.Status == status) && (customerId is null || j.CustomerId == customerId) && (driverId is null || j.DriverId == driverId)).ToList());
         public Task<IReadOnlyList<Job>> ListAsync(JobStatus? status = null, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<Job>>(Items.Where(j => status is null || j.Status == status).ToList());
     }
@@ -57,9 +60,11 @@ public class DispatchServiceTests
     private sealed class FakeNotifier : IDispatchNotifier
     {
         public readonly List<string> Events = [];
+        public readonly List<JobStatusChangedEvent> StatusEvents = [];
+        public readonly List<JobProgressEvent> ProgressEvents = [];
         public Task JobCreatedAsync(JobDto job, CancellationToken ct = default) { Events.Add("created"); return Task.CompletedTask; }
-        public Task JobStatusChangedAsync(JobStatusChangedEvent e, CancellationToken ct = default) { Events.Add($"status:{e.Status}"); return Task.CompletedTask; }
-        public Task JobProgressAsync(JobProgressEvent e, CancellationToken ct = default) { Events.Add("progress"); return Task.CompletedTask; }
+        public Task JobStatusChangedAsync(JobStatusChangedEvent e, CancellationToken ct = default) { Events.Add($"status:{e.Status}"); StatusEvents.Add(e); return Task.CompletedTask; }
+        public Task JobProgressAsync(JobProgressEvent e, CancellationToken ct = default) { Events.Add("progress"); ProgressEvents.Add(e); return Task.CompletedTask; }
         public Task DriverUpdatedAsync(DriverDto driver, CancellationToken ct = default) { Events.Add($"driver:{driver.Status}"); return Task.CompletedTask; }
         public Task OfferCreatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Add("offer:created"); return Task.CompletedTask; }
         public Task OfferUpdatedAsync(OfferDto offer, CancellationToken ct = default) { Events.Add($"offer:{offer.Status}"); return Task.CompletedTask; }
@@ -298,6 +303,69 @@ public class DispatchServiceTests
         await _svc.OfferJobAsync(job2.Id, offered.Id, Ttl);
         await _svc.CancelAsync(job2.Id);
         Assert.Equal(OfferStatus.Cancelled, _offers.Items[1].Status);
+    }
+
+    // ------------------------------------------------------- ownership & tracking
+
+    [Fact]
+    public async Task Jobs_remember_their_customer_and_get_an_unguessable_tracking_token()
+    {
+        var customer = Guid.NewGuid();
+        var mine = await _svc.CreateJobAsync("Pat", null, new Location(40, -74), new Location(40.05, -74.05), customer);
+        var walkIn = await NewJob();
+
+        Assert.Equal(customer, mine.CustomerId);
+        Assert.Null(walkIn.CustomerId);
+        Assert.Matches("^[0-9a-f]{32}$", mine.TrackingToken!);
+        Assert.NotEqual(mine.TrackingToken, walkIn.TrackingToken);
+    }
+
+    [Fact]
+    public async Task Tracking_resolves_only_a_valid_token_and_exposes_no_account_details()
+    {
+        var customer = Guid.NewGuid();
+        var driver = AddDriver();
+        var job = await _svc.CreateJobAsync("Pat Private", null, new Location(40, -74), new Location(40.05, -74.05), customer);
+        await _svc.AssignAsync(job.Id, driver.Id);
+
+        var tracking = await _svc.GetTrackingAsync(job.TrackingToken);
+
+        Assert.NotNull(tracking);
+        Assert.Equal(job.Id, tracking!.Id);
+        Assert.Equal(JobStatus.Assigned, tracking.Status);
+        Assert.Equal(driver.Name, tracking.DriverName);
+        Assert.Equal(2, tracking.History.Count);
+        // the DTO has no customer name/id/token members at all
+        var members = typeof(TrackingDto).GetProperties().Select(p => p.Name).ToList();
+        Assert.DoesNotContain("CustomerName", members);
+        Assert.DoesNotContain("CustomerId", members);
+        Assert.DoesNotContain("TrackingToken", members);
+
+        Assert.Null(await _svc.GetTrackingAsync(null));
+        Assert.Null(await _svc.GetTrackingAsync(""));
+        Assert.Null(await _svc.GetTrackingAsync("short"));
+        Assert.Null(await _svc.GetTrackingAsync(new string('a', 32)));
+        Assert.Null(await _svc.GetTrackingAsync(new string('a', 33)));
+        Assert.NotNull(await _svc.GetTrackingAsync(job.TrackingToken!.ToUpperInvariant())); // links survive being shouted
+    }
+
+    [Fact]
+    public async Task Events_carry_the_customer_and_driver_so_they_can_be_routed_to_the_right_people()
+    {
+        var customer = Guid.NewGuid();
+        var driver = AddDriver();
+        var job = await _svc.CreateJobAsync("Pat", null, new Location(40, -74), new Location(40.05, -74.05), customer);
+
+        await _svc.AssignAsync(job.Id, driver.Id);
+
+        var e = _notifier.StatusEvents.Single();
+        Assert.Equal(customer, e.CustomerId);
+        Assert.Equal(driver.Id, e.DriverId);
+        await _svc.StartTransitAsync(job.Id);
+        await _svc.UpdateProgressAsync(job.Id, new Location(40.01, -74.01), 30, 0.3);
+        var p = _notifier.ProgressEvents.Single();
+        Assert.Equal(customer, p.CustomerId);
+        Assert.Equal(driver.Id, p.DriverId);
     }
 
     // ------------------------------------------------------------ routes

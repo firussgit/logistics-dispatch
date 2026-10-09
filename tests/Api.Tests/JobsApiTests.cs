@@ -7,7 +7,7 @@ namespace LogisticsDispatch.Api.Tests;
 
 public class JobsApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private readonly HttpClient _client = factory.CreateClient();
+    private readonly HttpClient _client = factory.DispatcherClient();
 
     [Fact]
     public async Task Create_returns_201_with_location_header_and_pending_status()

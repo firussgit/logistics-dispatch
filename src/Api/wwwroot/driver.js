@@ -1,6 +1,6 @@
-(() => {
+(async () => {
+  await Auth.require(["Driver"]);
   const $ = (id) => document.getElementById(id);
-  const GROUP = 'dispatchers';
   const map = DispatchMap('map');
 
   let me = null;          // DriverDto
@@ -25,6 +25,7 @@
 
   async function api(path, options) {
     const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
+    if (res.status === 401) Auth.expired();
     if (!res.ok) {
       let msg = `${res.status} ${res.statusText}`;
       try { const p = await res.json(); msg = p.detail || p.title || msg; } catch { /* non-JSON */ }
@@ -124,9 +125,10 @@
 
   // ------------------------------------------------------------ data
   async function loadMe() {
-    const drivers = await api('/api/drivers');
-    const wanted = new URLSearchParams(location.search).get('id');
-    me = drivers.find((d) => d.id === wanted) ?? drivers.find((d) => !d.isAutomated) ?? drivers[0];
+    // Drivers are not allowed to list the fleet; the server tells us which driver this account operates.
+    const account = await api('/api/me');
+    if (!account.driver) throw new Error('This account is not linked to a driver.');
+    me = account.driver;
     map.setDriver(me);
   }
 
@@ -186,11 +188,12 @@
 
   conn.onreconnecting(() => setConn('reconnecting', 'Reconnecting…'));
   conn.onclose(() => setConn('offline', 'Offline'));
-  conn.onreconnected(async () => { setConn('online', 'Online'); await conn.invoke('JoinDispatchGroup', GROUP); await refreshAll(); });
+  // the server re-adds us to our own groups on every connect, so a reconnect only needs a data refresh
+  conn.onreconnected(async () => { setConn('online', 'Online'); await refreshAll(); });
 
   (async () => {
     try { await refreshAll(); map.fitAll(); } catch (e) { $('me').textContent = e.message; return; }
-    try { await conn.start(); await conn.invoke('JoinDispatchGroup', GROUP); setConn('online', 'Online'); }
+    try { await conn.start(); setConn('online', 'Online'); }
     catch { setConn('offline', 'Offline'); }
   })();
 })();

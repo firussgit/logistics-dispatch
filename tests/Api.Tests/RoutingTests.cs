@@ -160,7 +160,7 @@ public class RouteFollowingTests : IClassFixture<RouteFollowingTests.BentRouteFa
     public RouteFollowingTests(BentRouteFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.DispatcherClient();
     }
 
     [Fact]
@@ -241,7 +241,7 @@ public class RoutingStatusTests(ApiFactory factory) : IClassFixture<ApiFactory>
     [Fact]
     public async Task Status_reports_straight_line_mode_when_no_engine_is_configured()
     {
-        var json = await factory.CreateClient().GetFromJsonAsync<System.Text.Json.JsonElement>("/api/routing");
+        var json = await factory.DispatcherClient().GetFromJsonAsync<System.Text.Json.JsonElement>("/api/routing");
         Assert.Equal("StraightLine", json.GetProperty("provider").GetString());
         Assert.Equal("straight-line", json.GetProperty("mode").GetString());
     }

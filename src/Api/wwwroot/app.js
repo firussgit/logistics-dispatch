@@ -1,9 +1,9 @@
-(() => {
+(async () => {
+  await Auth.require(["Dispatcher"]);
   const jobs = new Map();
   const drivers = new Map();
   const $ = (id) => document.getElementById(id);
   const STATUSES = ['Pending', 'Assigned', 'InTransit', 'Completed', 'Cancelled'];
-  const GROUP = 'dispatchers';
   const CENTER = { lat: 40.7128, lng: -74.006 };
   const map = DispatchMap('map');
 
@@ -21,6 +21,7 @@
 
   async function api(path, options) {
     const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
+    if (res.status === 401) Auth.expired();
     if (!res.ok) {
       let msg = `${res.status} ${res.statusText}`;
       try {
@@ -90,7 +91,7 @@
     const tr = el('tr', { className: 'clickable' });
     tr.onclick = (ev) => { if (!ev.target.closest('select,button,a')) map.focusJob(j, j.driverId); };
     tr.dataset.id = j.id;
-    tr.append(el('td', {}, el('a', { className: 'link', href: `track.html?id=${j.id}`, target: '_blank', textContent: j.reference })), el('td', { textContent: j.customerName }));
+    tr.append(el('td', {}, el('a', { className: 'link', href: `track.html?t=${j.trackingToken}`, target: '_blank', textContent: j.reference })), el('td', { textContent: j.customerName }));
     tr.append(el('td', {}, el('span', { className: `badge status-${j.status.toLowerCase()}`, textContent: j.status })));
 
     const driverCell = el('td');
@@ -199,7 +200,6 @@
   conn.onclose(() => setConn('offline', 'Offline'));
   conn.onreconnected(async () => {
     setConn('online', 'Connected');
-    await conn.invoke('JoinDispatchGroup', GROUP);
     await resync();
     toast('Reconnected — data refreshed', 'info');
   });
@@ -207,7 +207,6 @@
   async function start() {
     try {
       await conn.start();
-      await conn.invoke('JoinDispatchGroup', GROUP);
       setConn('online', 'Connected');
       await resync();
     } catch (e) {

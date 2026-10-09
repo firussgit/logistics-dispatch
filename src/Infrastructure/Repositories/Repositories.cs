@@ -10,6 +10,18 @@ public class JobRepository(DispatchDbContext db) : IJobRepository
     public Task<Job?> GetAsync(Guid id, CancellationToken ct = default) =>
         db.Jobs.FirstOrDefaultAsync(j => j.Id == id, ct);
 
+    public Task<Job?> GetByTrackingTokenAsync(string token, CancellationToken ct = default) =>
+        db.Jobs.Include(j => j.History).FirstOrDefaultAsync(j => j.TrackingToken == token, ct);
+
+    public async Task<IReadOnlyList<Job>> ListForUserAsync(JobStatus? status, Guid? customerId, Guid? driverId, CancellationToken ct = default)
+    {
+        var query = db.Jobs.AsQueryable();
+        if (status is { } s) query = query.Where(j => j.Status == s);
+        if (customerId is { } c) query = query.Where(j => j.CustomerId == c);
+        if (driverId is { } d) query = query.Where(j => j.DriverId == d);
+        return await query.OrderByDescending(j => j.CreatedAt).ToListAsync(ct);
+    }
+
     public Task<Job?> GetWithHistoryAsync(Guid id, CancellationToken ct = default) =>
         db.Jobs.Include(j => j.History).FirstOrDefaultAsync(j => j.Id == id, ct);
 
@@ -68,4 +80,15 @@ public class OfferRepository(DispatchDbContext db) : IOfferRepository
 
     public async Task<IReadOnlyList<JobOffer>> ListSinceAsync(DateTimeOffset since, CancellationToken ct = default) =>
         await db.Offers.Where(o => o.CreatedAt >= since).OrderBy(o => o.CreatedAt).ToListAsync(ct);
+}
+
+public class UserRepository(DispatchDbContext db) : IUserRepository
+{
+    public void Add(User user) => db.Users.Add(user);
+
+    public Task<User?> GetAsync(Guid id, CancellationToken ct = default) =>
+        db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+
+    public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken ct = default) =>
+        db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
 }

@@ -20,6 +20,9 @@ public static class DependencyInjection
         services.AddScoped<IJobRepository, JobRepository>();
         services.AddScoped<IDriverRepository, DriverRepository>();
         services.AddScoped<IOfferRepository, OfferRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddSingleton<Microsoft.AspNetCore.Identity.IPasswordHasher<User>, Microsoft.AspNetCore.Identity.PasswordHasher<User>>();
+        services.Configure<SeedOptions>(config.GetSection(SeedOptions.Section));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<DispatchService>();
 

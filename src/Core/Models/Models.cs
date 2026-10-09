@@ -16,11 +16,13 @@ public record JobDto(
     double Progress,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
+    Guid? CustomerId = null,
+    string? TrackingToken = null,
     IReadOnlyList<StatusHistoryDto>? History = null)
 {
     public static JobDto From(Job j, bool includeHistory = false) => new(
         j.Id, j.Reference, j.CustomerName, j.Notes, j.Pickup, j.Dropoff, j.Status, j.DriverId,
-        j.CurrentLocation, j.EtaSeconds, j.Progress, j.CreatedAt, j.UpdatedAt,
+        j.CurrentLocation, j.EtaSeconds, j.Progress, j.CreatedAt, j.UpdatedAt, j.CustomerId, j.TrackingToken,
         includeHistory
             ? j.History.OrderBy(h => h.At).Select(h => new StatusHistoryDto(h.From, h.To, h.At, h.Note)).ToList()
             : null);
@@ -31,9 +33,9 @@ public record DriverDto(Guid Id, string Name, DriverStatus Status, Location Curr
     public static DriverDto From(Driver d) => new(d.Id, d.Name, d.Status, d.CurrentLocation, d.ActiveJobId, d.IsAutomated);
 }
 
-public record JobStatusChangedEvent(Guid JobId, string Reference, JobStatus Status, Guid? DriverId, DateTimeOffset At);
+public record JobStatusChangedEvent(Guid JobId, string Reference, JobStatus Status, Guid? DriverId, DateTimeOffset At, Guid? CustomerId = null);
 
-public record JobProgressEvent(Guid JobId, double Lat, double Lng, int? EtaSeconds, double Progress);
+public record JobProgressEvent(Guid JobId, double Lat, double Lng, int? EtaSeconds, double Progress, Guid? DriverId = null, Guid? CustomerId = null);
 
 public record SystemStatusDto(
     IReadOnlyDictionary<string, int> JobsByStatus,
@@ -74,4 +76,24 @@ public record OfferDto(
 /// <summary>Road paths for a job as <c>[lat,lng]</c> pairs; a leg is null until the router has produced it.</summary>
 public record RouteDto(Guid JobId, IReadOnlyList<double[]>? Approach, IReadOnlyList<double[]>? Trip, bool IsStraightLine);
 
-public record RouteReadyEvent(Guid JobId, RouteKind Kind);
+public record RouteReadyEvent(Guid JobId, RouteKind Kind, Guid? DriverId = null, Guid? CustomerId = null);
+
+/// <summary>The signed-in user, as the UI needs it.</summary>
+public record MeDto(Guid Id, string Email, string DisplayName, UserRole Role, DriverDto? Driver);
+
+/// <summary>
+/// What an anonymous visitor with a tracking link may see: enough to follow the delivery, nothing about the account behind it.
+/// </summary>
+public record TrackingDto(
+    Guid Id,
+    string Reference,
+    JobStatus Status,
+    string? DriverName,
+    Location? DriverLocation,
+    Location Pickup,
+    Location Dropoff,
+    Location CurrentLocation,
+    int? EtaSeconds,
+    double Progress,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<StatusHistoryDto> History);

@@ -18,6 +18,32 @@ Open <http://localhost:5080> (dispatcher console with a live map). Click a job r
 nearest idle driver and drive to its destination. Open a second tab to see both update live.
 The SQLite database (`dispatch.db`) is created and seeded with 5 drivers on first start.
 
+## Accounts & roles
+
+Every API call and the dispatch hub need a signed-in user (HttpOnly cookie session); `login.html` is the front door and sends
+each role to its own page. Customers can register themselves; dispatcher and driver accounts are created by the operator.
+
+| Role | Page | Can |
+|---|---|---|
+| **Customer** | `customer.html` | Order a delivery (pick pickup/dropoff on the map), follow and cancel **their own** orders |
+| **Dispatcher** | `/` (console) | See and control everything: assign, offer, cancel, answer offers for a driver, fleet map |
+| **Driver** | `driver.html` | Receive, accept or decline **their own** offers; work **their own** jobs |
+
+Anyone with a delivery's tracking link (`track.html?t=<token>`, a random 128-bit secret per job) can follow that one delivery without
+an account; the page shows the driver's name and position and the route, never the customer behind it.
+
+**Demo accounts** (development only): with `Seed:DemoUsers` on, `dispatcher@demo.test`, `driver@demo.test` and `customer@demo.test`
+exist, with the password in `Seed:DemoPassword` (`src/Api/appsettings.json`); the login page shows one-click buttons for them.
+
+**Security notes**
+
+- Passwords are hashed (ASP.NET Core `PasswordHasher`, PBKDF2) and never returned; unknown email and wrong password are indistinguishable (and equally slow).
+- Login/registration are rate limited per client address (`Auth:AttemptsPerMinute`, default 10).
+- Someone else's order answers **404**, not 403, so ids can't be probed; wrong-role calls answer 403, signed-out calls 401.
+- SignalR groups are assigned **by the server** from the signed-in role; there is no client-callable "join group". Tracking links use a separate anonymous hub (`/hubs/track`) that can only follow the one job its token unlocks.
+- CSRF: the cookie is `SameSite=Lax` and the API only accepts JSON, so cross-site form posts are not sent the cookie.
+- **Before deploying:** set `Seed:DemoUsers` to `false`, serve over HTTPS and set the cookie `SecurePolicy` to `Always`, and move the connection string/secrets out of `appsettings.json`.
+
 ## Street routes
 
 Drivers follow real roads: each job gets a pickup→dropoff path (and an approach path from the driver's position at assignment) from a
@@ -68,7 +94,9 @@ Key decisions:
 
 | Route | Description |
 |---|---|
-| `POST /api/jobs` | Create a job (validated: coordinates in range, pickup ≠ dropoff) |
+| `POST /api/auth/register` · `/login` · `/logout`, `GET /api/me` | Sessions (customers self-register) |
+| `GET /api/track/{token}` · `/route` | Public delivery tracking by link token (no login) |
+| `POST /api/jobs` | Create a job (customer or dispatcher; validated: coordinates in range, pickup ≠ dropoff) |
 | `GET /api/jobs?status=` · `GET /api/jobs/{id}` | List / detail with status history |
 | `POST /api/jobs/{id}/assign` `{driverId}` | Assign a driver (409 on busy driver, wrong state, or lost race) |
 | `POST /api/jobs/{id}/accept` · `/complete` · `/cancel` | Lifecycle transitions |
@@ -79,7 +107,7 @@ Key decisions:
 | `GET /api/routing` | Configured routing engine and whether it is answering |
 | `GET /api/drivers` · `GET /api/status` | Drivers; live counts by status |
 
-Hub: `/hubs/dispatch` — methods `JoinDispatchGroup(group)`, `LeaveDispatchGroup(group)`, `SendStatusUpdate(update)`;
+Hubs: `/hubs/dispatch` (signed-in; method `SendStatusUpdate(update)`, groups assigned server-side) and `/hubs/track` (anonymous; method `Track(token)`);
 events `JobCreated`, `JobStatusChanged`, `JobProgress`, `DriverUpdated`, `OfferCreated`, `OfferUpdated`, `RouteReady`. Sample requests: `src/Api/Api.http`.
 
 ## Switching to SQL Server

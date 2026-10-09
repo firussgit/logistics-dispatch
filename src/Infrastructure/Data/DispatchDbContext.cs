@@ -9,6 +9,7 @@ public class DispatchDbContext(DbContextOptions<DispatchDbContext> options) : Db
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<StatusHistory> StatusHistory => Set<StatusHistory>();
     public DbSet<JobOffer> Offers => Set<JobOffer>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DispatchDbContext).Assembly);

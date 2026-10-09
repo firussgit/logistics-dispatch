@@ -64,3 +64,12 @@ a.link { color: var(--accent); text-decoration: none; }
 .conn.routing { background: var(--pending); }
 .conn.routing.streets { background: var(--completed); }
 .conn.routing.straight { background: var(--assigned); }
+
+/* ---- signed-in user box ---- */
+.userbox { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.user-name { font-weight: 600; }
+.role-chip { padding: 2px 9px; border-radius: 99px; font-size: 11px; color: #fff; background: var(--pending); }
+.role-chip.role-dispatcher { background: var(--intransit); }
+.role-chip.role-driver { background: var(--assigned); }
+.role-chip.role-customer { background: var(--completed); }
+button.signout { padding: 3px 10px; font-size: 12px; }

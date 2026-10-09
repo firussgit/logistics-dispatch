@@ -11,6 +11,9 @@ public class JobConfiguration : IEntityTypeConfiguration<Job>
         b.Property(j => j.Id).ValueGeneratedNever();
         b.Property(j => j.Reference).HasMaxLength(20).IsRequired();
         b.HasIndex(j => j.Reference).IsUnique();
+        b.Property(j => j.TrackingToken).HasMaxLength(64).IsRequired();
+        b.HasIndex(j => j.TrackingToken).IsUnique();
+        b.HasIndex(j => j.CustomerId);
         b.Property(j => j.CustomerName).HasMaxLength(100).IsRequired();
         b.Property(j => j.Notes).HasMaxLength(500);
         b.Property(j => j.Status).HasConversion<string>().HasMaxLength(20);
@@ -60,5 +63,20 @@ public class JobOfferConfiguration : IEntityTypeConfiguration<JobOffer>
         b.HasIndex(o => new { o.JobId, o.Status });
         b.HasIndex(o => new { o.DriverId, o.Status });
         b.HasIndex(o => o.CreatedAt);
+    }
+}
+
+public class UserConfiguration : IEntityTypeConfiguration<User>
+{
+    public void Configure(EntityTypeBuilder<User> b)
+    {
+        b.HasKey(u => u.Id);
+        b.Property(u => u.Id).ValueGeneratedNever();
+        b.Property(u => u.Email).HasMaxLength(254).IsRequired();
+        b.HasIndex(u => u.Email).IsUnique();
+        b.Property(u => u.DisplayName).HasMaxLength(60).IsRequired();
+        b.Property(u => u.PasswordHash).HasMaxLength(512).IsRequired();
+        b.Property(u => u.Role).HasConversion<string>().HasMaxLength(20);
+        b.HasIndex(u => u.DriverId);
     }
 }

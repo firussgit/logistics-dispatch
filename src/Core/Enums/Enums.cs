@@ -18,6 +18,13 @@ public enum OfferStatus
     Cancelled
 }
 
+public enum UserRole
+{
+    Customer,
+    Dispatcher,
+    Driver
+}
+
 public enum DriverStatus
 {
     Idle,

@@ -27,7 +27,7 @@ public class OfferDispatchWorkerTests : IClassFixture<OfferDispatchWorkerTests.A
     public OfferDispatchWorkerTests(AcceptingFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.DispatcherClient();
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class OfferDeclineCascadeTests : IClassFixture<OfferDeclineCascadeTests.D
     public OfferDeclineCascadeTests(DecliningFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.DispatcherClient();
     }
 
     [Fact]
